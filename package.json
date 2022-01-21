@@ -1,0 +1,25 @@
+{
+  "name": "dorky",
+  "version": "1.0.0",
+  "description": "DevOps Records Keeper.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trishantpahwa/dorky.git"
+  },
+  "keywords": [
+    "DevOps",
+    "env",
+    "yaml",
+    "json"
+  ],
+  "author": "Trishant Pahwa",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/trishantpahwa/dorky/issues"
+  },
+  "homepage": "https://github.com/trishantpahwa/dorky#readme"
+}
