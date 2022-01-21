@@ -21,5 +21,8 @@
   "bugs": {
     "url": "https://github.com/trishantpahwa/dorky/issues"
   },
-  "homepage": "https://github.com/trishantpahwa/dorky#readme"
+  "homepage": "https://github.com/trishantpahwa/dorky#readme",
+  "dependencies": {
+    "glob": "^7.2.0"
+  }
 }
