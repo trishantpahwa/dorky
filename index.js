@@ -7,8 +7,18 @@ const fs = require('fs');
 const { EOL } = require('os');
 
 function initializeProject() {
-    fs.mkdirSync('.dorky')
-    console.log('Initialized project in current folder(.dorky).');
+    if (fs.existsSync('.dorky')) {
+        console.log('Dorky project already initialized. Remove .dorky folder to reinitialize.')
+    } else {
+        fs.mkdirSync('.dorky');
+        if (fs.existsSync('.dorkyignore')) {
+            fs.rmdirSync('.dorky');
+            console.log('Dorky project already initialized. Remove .dorkyignore file to reinitialize.');
+        } else {
+            fs.writeFileSync('.dorkyignore', '');
+            console.log('Initialized project in current folder(.dorky).');
+        }
+    }
 }
 
 function listFiles() {
