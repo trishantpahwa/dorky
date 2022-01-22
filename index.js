@@ -98,20 +98,23 @@ if (args.length == 1) {
 
                         let metaData = JSON.parse(fs.readFileSync(path.join('.dorky', 'metadata.json')).toString());
                         metaData['stage-1-files'].map((file) => {
-                            const putObjectParams = {
-                                Bucket: 'dorky',
-                                Key: path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'),
-                                Body: fs.readFileSync(path.relative(__dirname, file)).toString()
-                            }
-                            // Upload records
-                            s3.putObject(putObjectParams, (err, data) => {
-                                if (err) {
-                                    console.log('Unable to upload file ' + path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'))
-                                    console.log(err);
+                            if (metaData['uploaded-files'].includes(file)) return;
+                            else {
+                                const putObjectParams = {
+                                    Bucket: 'dorky',
+                                    Key: path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'),
+                                    Body: fs.readFileSync(path.relative(__dirname, file)).toString()
                                 }
-                                else console.log(chalk.green('Uploaded ' + file));
-                            });
-                            metaData['uploaded-files'].push(file);
+                                // Upload records
+                                s3.putObject(putObjectParams, (err, data) => {
+                                    if (err) {
+                                        console.log('Unable to upload file ' + path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'))
+                                        console.log(err);
+                                    }
+                                    else console.log(chalk.green('Uploaded ' + file));
+                                });
+                                metaData['uploaded-files'].push(file);
+                            }
                         })
 
                         fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
@@ -122,7 +125,7 @@ if (args.length == 1) {
                         }
                         // Upload metadata.json
                         s3.putObject(putObjectParams, (err, data) => {
-                            if(err) console.log(err);
+                            if (err) console.log(err);
                             else console.log(chalk.green('Uploaded metadata'));
                         });
                     }
