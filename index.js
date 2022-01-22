@@ -6,12 +6,14 @@ const chalk = require('chalk');
 const fs = require('fs');
 const { EOL } = require('os');
 
+
+// Initializes project, creates a new .dorky folder, and adds a metadata file to it, and creates a .dorkyignore file.
 function initializeProject() {
     if (fs.existsSync('.dorky')) {
         console.log('Dorky project already initialized. Remove .dorky folder to reinitialize.')
     } else {
         fs.mkdirSync('.dorky');
-        fs.writeFileSync('.dorky/metadata.json', JSON.stringify({'files': []}));
+        fs.writeFileSync('.dorky/metadata.json', JSON.stringify({'stage-1-files': [], 'uploaded-files': []}));
         if (fs.existsSync('.dorkyignore')) {
             fs.rmdirSync('.dorky');
             console.log('Dorky project already initialized. Remove .dorkyignore file to reinitialize.');
@@ -22,6 +24,7 @@ function initializeProject() {
     }
 }
 
+// Lists all the files that are not excluded explicitly.
 function listFiles() {
     let exclusions = fs.readFileSync('./.dorkyignore').toString().split(EOL);
     if(exclusions[0] == '') exclusions = [];
