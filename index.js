@@ -1,4 +1,5 @@
-const glob = require("glob");
+const glob = require('glob');
+const chalk = require('chalk');
 
 const exclusions = ['node_modules', 'tester'];
 
@@ -22,6 +23,7 @@ getDirectories(__dirname, function (err, res) {
     } else {
         let listOfFiles;
         listOfFiles = res.filter(element => !excludeIsPresent(element));
-        console.log(listOfFiles);
+        console.log(chalk.green('Found files:'))
+        listOfFiles.map((file) => console.log('\t' + chalk.bgGrey(file)));
     }
 });
