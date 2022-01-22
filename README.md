@@ -3,6 +3,8 @@ DevOps Records Keeper
 
 ## Steps to use:
 
+> Setup AWS_ACCESS_KEY and AWS_SECRET_KEY before hand.
+
 ### To push files to S3 bucket.
 1. Create a folder named `dorky` in S3.
 2. Initialize dorky setup in the root folder of your project, using `dorky init`.
