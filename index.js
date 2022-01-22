@@ -41,13 +41,12 @@ function listFiles() {
         }
         return present;
     }
-
-    getDirectories(__dirname, function (err, res) {
+    getDirectories(process.cwd(), function (err, res) {
         if (err) {
             console.log('Error', err);
         } else {
             let listOfFiles;
-            listOfFiles = res.filter(element => !excludeIsPresent(element)).map(file => path.relative(__dirname, file));
+            listOfFiles = res.filter(element => !excludeIsPresent(element)).map(file => path.relative(process.cwd(), file));
             console.log(chalk.green('Found files:'))
             listOfFiles.map((file) => console.log('\t' + chalk.bgGrey(file)));
         }
@@ -71,7 +70,7 @@ if (args.length == 1) {
             region: process.env.AWS_REGION
         });
         const metaData = JSON.parse(fs.readFileSync(METADATA_FILE));
-        const rootFolder = __dirname.split('\\').pop()
+        const rootFolder = process.cwd().split('\\').pop()
 
         function rootFolderExists(rootFolder) {
             let s3 = new AWS.S3();
@@ -79,12 +78,8 @@ if (args.length == 1) {
             s3.listObjects(bucketParams, (err, s3Objects) => {
                 if (err) console.log(err);
                 else {
-                    if (s3Objects.Contents.filter(object => object.Key == rootFolder).length) {
-                        // const getObjectParams = {
-                        //     Bucket: 'dorky',
-                        //     Key: path.join(rootFolder, 'metadata.json')
-                        // }
-                        // s3.getObject(getObjectParams);
+                    if (s3Objects.Contents.filter((object) => object.Key.split('/')[0] == rootFolder).length > 0) {
+                        console.log('Folder exists');
                     } else {
                         // let putObjectParams = {
                         //     Bucket: 'dorky',
@@ -102,13 +97,13 @@ if (args.length == 1) {
                             else {
                                 const putObjectParams = {
                                     Bucket: 'dorky',
-                                    Key: path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'),
-                                    Body: fs.readFileSync(path.relative(__dirname, file)).toString()
+                                    Key: path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'),
+                                    Body: fs.readFileSync(path.relative(process.cwd(), file)).toString()
                                 }
                                 // Upload records
                                 s3.putObject(putObjectParams, (err, data) => {
                                     if (err) {
-                                        console.log('Unable to upload file ' + path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'))
+                                        console.log('Unable to upload file ' + path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'))
                                         console.log(err);
                                     }
                                     else console.log(chalk.green('Uploaded ' + file));
@@ -120,7 +115,7 @@ if (args.length == 1) {
                         fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
                         putObjectParams = {
                             Bucket: 'dorky',
-                            Key: path.relative(__dirname, path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
+                            Key: path.relative(process.cwd(), path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
                             Body: JSON.stringify(metaData)
                         }
                         // Upload metadata.json
@@ -134,9 +129,6 @@ if (args.length == 1) {
 
         }
         rootFolderExists(rootFolder);
-        // 
-        // const response = await S3.listObjects(bucketParams).promise();
-        // return response.Contents.map(file => file.Key);
     }
 } else if (args.length == 2) {
     if (args[0] == 'add') {
