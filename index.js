@@ -6,7 +6,6 @@ const chalk = require('chalk');
 const fs = require('fs');
 const { EOL } = require('os');
 
-
 // Initializes project, creates a new .dorky folder, and adds a metadata file to it, and creates a .dorkyignore file.
 function initializeProject() {
     if (fs.existsSync('.dorky')) {
@@ -68,9 +67,9 @@ if (args.length == 1) {
         const file = args[1];
         if(fs.existsSync(file)) {
             const metaData = JSON.parse(fs.readFileSync(METADATA_FILE));
-            const metaDataFiles = new Set(metaData['stage-1-files']);
-            metaDataFiles.add(file);
-            metaData['stage-1-files'] = Array.from(metaDataFiles);
+            const stage1Files = new Set(metaData['stage-1-files']);
+            stage1Files.add(file);
+            metaData['stage-1-files'] = Array.from(stage1Files);
             fs.writeFileSync(METADATA_FILE, JSON.stringify(metaData));
             console.log(chalk.bgGreen('Success'));
             console.log(chalk.green(`Added file ${file} successfully to stage-1.`))
