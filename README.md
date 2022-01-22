@@ -1,7 +1,6 @@
 # dorky
 DevOps Records Keeper
 
-
 ## Steps to use:
 
 ### To push files to S3 bucket.
@@ -12,3 +11,6 @@ DevOps Records Keeper
 4. Push files to S3 bucket using `dorky push`.
 
 ### To pull files from S3 bucket.
+1. Initialize dorky project using `dorky init`.
+2. Use `dorky pull` to pull the status from S3 bucket.
+3. Use `dorky pull-files` to pull the files from S3 bucket.
