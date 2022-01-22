@@ -22,7 +22,8 @@ function initializeProject() {
 }
 
 function listFiles() {
-    const exclusions = fs.readFileSync('./.dorkyignore').toString().split(EOL);
+    let exclusions = fs.readFileSync('./.dorkyignore').toString().split(EOL);
+    if(exclusions[0] == '') exclusions = [];
     var getDirectories = function (src, callback) {
         glob(src + '/**/*', callback);
     };
