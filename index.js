@@ -4,8 +4,7 @@ const glob = require('glob');
 const path = require('path');
 const chalk = require('chalk');
 const fs = require('fs');
-
-const exclusions = ['node_modules'];
+const { EOL } = require('os');
 
 function initializeProject() {
     fs.mkdirSync('.dorky')
@@ -13,6 +12,7 @@ function initializeProject() {
 }
 
 function listFiles() {
+    const exclusions = fs.readFileSync('./.dorkyignore').toString().split(EOL);
     var getDirectories = function (src, callback) {
         glob(src + '/**/*', callback);
     };
