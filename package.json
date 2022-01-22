@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "DevOps Records Keeper.",
   "main": "index.js",
+  "bin": {
+    "dorky": "index.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
