@@ -62,4 +62,21 @@ if (args.length == 1) {
     if (args[0] == 'list') {
         listFiles();
     }
+} else if (args.length == 2) {
+    if (args[0] == 'add') {
+        const METADATA_FILE = '.dorky/metadata.json';
+        const file = args[1];
+        if(fs.existsSync(file)) {
+            const metaData = JSON.parse(fs.readFileSync(METADATA_FILE));
+            const metaDataFiles = new Set(metaData['stage-1-files']);
+            metaDataFiles.add(file);
+            metaData['stage-1-files'] = Array.from(metaDataFiles);
+            fs.writeFileSync(METADATA_FILE, JSON.stringify(metaData));
+            console.log(chalk.bgGreen('Success'));
+            console.log(chalk.green(`Added file ${file} successfully to stage-1.`))
+        } else {
+            console.log(chalk.bgRed('Error'))
+            console.log(chalk.red(`\tFile ${file} doesn\'t exist`))
+        }
+    }
 }
