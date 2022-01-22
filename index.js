@@ -1,7 +1,8 @@
 const glob = require('glob');
+const path = require('path');
 const chalk = require('chalk');
 
-const exclusions = ['node_modules', 'tester'];
+const exclusions = ['node_modules'];
 
 function listFiles() {
     var getDirectories = function (src, callback) {
@@ -11,8 +12,8 @@ function listFiles() {
     function excludeIsPresent(element) {
         let present = false;
         let i = 0;
-        while(i<exclusions.length) {
-            if(element.includes(exclusions[i])) present = true;
+        while (i < exclusions.length) {
+            if (element.includes(exclusions[i])) present = true;
             i += 1;
         }
         return present;
@@ -23,7 +24,7 @@ function listFiles() {
             console.log('Error', err);
         } else {
             let listOfFiles;
-            listOfFiles = res.filter(element => !excludeIsPresent(element));
+            listOfFiles = res.filter(element => !excludeIsPresent(element)).map(file => path.relative(__dirname, file));
             console.log(chalk.green('Found files:'))
             listOfFiles.map((file) => console.log('\t' + chalk.bgGrey(file)));
         }
@@ -31,8 +32,8 @@ function listFiles() {
 }
 
 const args = process.argv.splice(2, 2);
-if(args.length == 1) {
-    if(args[0] == 'list') {
+if (args.length == 1) {
+    if (args[0] == 'list') {
         listFiles();
     }
 }
