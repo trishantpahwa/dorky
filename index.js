@@ -5,6 +5,7 @@ const path = require('path');
 const chalk = require('chalk');
 const fs = require('fs');
 const { EOL } = require('os');
+var AWS = require('aws-sdk');
 
 // Initializes project, creates a new .dorky folder, and adds a metadata file to it, and creates a .dorkyignore file.
 function initializeProject() {
@@ -12,7 +13,7 @@ function initializeProject() {
         console.log('Dorky project already initialized. Remove .dorky folder to reinitialize.')
     } else {
         fs.mkdirSync('.dorky');
-        fs.writeFileSync('.dorky/metadata.json', JSON.stringify({'stage-1-files': [], 'uploaded-files': []}));
+        fs.writeFileSync('.dorky/metadata.json', JSON.stringify({ 'stage-1-files': [], 'uploaded-files': [] }));
         if (fs.existsSync('.dorkyignore')) {
             fs.rmdirSync('.dorky');
             console.log('Dorky project already initialized. Remove .dorkyignore file to reinitialize.');
@@ -26,7 +27,7 @@ function initializeProject() {
 // Lists all the files that are not excluded explicitly.
 function listFiles() {
     let exclusions = fs.readFileSync('./.dorkyignore').toString().split(EOL);
-    if(exclusions[0] == '') exclusions = [];
+    if (exclusions[0] == '') exclusions = [];
     var getDirectories = function (src, callback) {
         glob(src + '/**/*', callback);
     };
@@ -61,11 +62,84 @@ if (args.length == 1) {
     if (args[0] == 'list') {
         listFiles();
     }
+    if (args[0] == 'push') {
+        console.log('pushing files to server.');
+        const METADATA_FILE = '.dorky/metadata.json';
+        AWS.config.update({
+            accessKeyId: process.env.AWS_ACCESS_KEY,
+            secretAccessKey: process.env.AWS_SECRET_KEY,
+            region: process.env.AWS_REGION
+        });
+        const metaData = JSON.parse(fs.readFileSync(METADATA_FILE));
+        const rootFolder = __dirname.split('\\').pop()
+
+        function rootFolderExists(rootFolder) {
+            let s3 = new AWS.S3();
+            const bucketParams = { Bucket: 'dorky' };
+            s3.listObjects(bucketParams, (err, s3Objects) => {
+                if (err) console.log(err);
+                else {
+                    if (s3Objects.Contents.filter(object => object.Key == rootFolder).length) {
+                        // const getObjectParams = {
+                        //     Bucket: 'dorky',
+                        //     Key: path.join(rootFolder, 'metadata.json')
+                        // }
+                        // s3.getObject(getObjectParams);
+                    } else {
+                        // let putObjectParams = {
+                        //     Bucket: 'dorky',
+                        //     Key: rootFolder + '/',
+                        // }
+                        // // Upload root folder.
+                        // s3.putObject(putObjectParams, (err, data) => {
+                        //     if(err) console.log(err);
+                        //     else console.log(data);
+                        // });
+
+                        let metaData = JSON.parse(fs.readFileSync(path.join('.dorky', 'metadata.json')).toString());
+                        metaData['stage-1-files'].map((file) => {
+                            const putObjectParams = {
+                                Bucket: 'dorky',
+                                Key: path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'),
+                                Body: fs.readFileSync(path.relative(__dirname, file)).toString()
+                            }
+                            // Upload records
+                            s3.putObject(putObjectParams, (err, data) => {
+                                if (err) {
+                                    console.log('Unable to upload file ' + path.join(rootFolder, path.relative(__dirname, file)).replace(/\\/g, '/'))
+                                    console.log(err);
+                                }
+                                else console.log(chalk.green('Uploaded ' + file));
+                            });
+                            metaData['uploaded-files'].push(file);
+                        })
+
+                        fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
+                        putObjectParams = {
+                            Bucket: 'dorky',
+                            Key: path.relative(__dirname, path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
+                            Body: JSON.stringify(metaData)
+                        }
+                        // Upload metadata.json
+                        s3.putObject(putObjectParams, (err, data) => {
+                            if(err) console.log(err);
+                            else console.log(chalk.green('Uploaded metadata'));
+                        });
+                    }
+                }
+            })
+
+        }
+        rootFolderExists(rootFolder);
+        // 
+        // const response = await S3.listObjects(bucketParams).promise();
+        // return response.Contents.map(file => file.Key);
+    }
 } else if (args.length == 2) {
     if (args[0] == 'add') {
         const METADATA_FILE = '.dorky/metadata.json';
         const file = args[1];
-        if(fs.existsSync(file)) {
+        if (fs.existsSync(file)) {
             const metaData = JSON.parse(fs.readFileSync(METADATA_FILE));
             const stage1Files = new Set(metaData['stage-1-files']);
             stage1Files.add(file);
