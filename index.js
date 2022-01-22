@@ -3,8 +3,14 @@
 const glob = require('glob');
 const path = require('path');
 const chalk = require('chalk');
+const fs = require('fs');
 
 const exclusions = ['node_modules'];
+
+function initializeProject() {
+    fs.mkdirSync('.dorky')
+    console.log('Initialized project in current folder(.dorky).');
+}
 
 function listFiles() {
     var getDirectories = function (src, callback) {
@@ -35,6 +41,9 @@ function listFiles() {
 
 const args = process.argv.splice(2, 2);
 if (args.length == 1) {
+    if (args[0] == 'init') {
+        initializeProject();
+    }
     if (args[0] == 'list') {
         listFiles();
     }
