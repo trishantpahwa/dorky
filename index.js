@@ -143,8 +143,16 @@ if (args.length == 1) {
             console.log(chalk.bgGreen('Success'));
             console.log(chalk.green(`Added file ${file} successfully to stage-1.`))
         } else {
-            console.log(chalk.bgRed('Error'))
+            console.log(chalk
+                .bgRed('Error'))
             console.log(chalk.red(`\tFile ${file} doesn\'t exist`))
         }
+    } else if(args[0] == 'reset') {
+        const METADATA_FILE = '.dorky/metadata.json';
+        const metaData = JSON.parse(fs.readFileSync(METADATA_FILE));
+        const file = args[1];
+        resetFileIndex = metaData['stage-1-files'].indexOf(file);
+        metaData['stage-1-files'].splice(resetFileIndex, 1);
+        fs.writeFileSync(METADATA_FILE, JSON.stringify(metaData));
     }
 }
