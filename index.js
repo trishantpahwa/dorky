@@ -63,7 +63,6 @@ if (args.length == 1) {
     }
     if (args[0] == 'push') {
         console.log('pushing files to server.');
-        const METADATA_FILE = '.dorky/metadata.json';
         AWS.config.update({
             accessKeyId: process.env.AWS_ACCESS_KEY,
             secretAccessKey: process.env.AWS_SECRET_KEY,
