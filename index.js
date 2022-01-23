@@ -69,7 +69,6 @@ if (args.length == 1) {
             secretAccessKey: process.env.AWS_SECRET_KEY,
             region: process.env.AWS_REGION
         });
-        const metaData = JSON.parse(fs.readFileSync(METADATA_FILE));
         const rootFolder = process.cwd().split('\\').pop()
 
         function rootFolderExists(rootFolder) {
