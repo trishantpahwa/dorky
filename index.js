@@ -111,7 +111,7 @@ if (args.length == 1) {
                                 metaData['uploaded-files'].push(file);
                             }
                         })
-
+                        metaData['uploaded-files'] = Array.from(new Set(metaData['uploaded-files']));
                         fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
                         putObjectParams = {
                             Bucket: 'dorky',
