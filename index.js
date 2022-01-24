@@ -82,65 +82,60 @@ if (args.length == 1) {
                         let removed = metaData['uploaded-files'].filter(x => !metaData['stage-1-files'].includes(x));
                         // Uploaded added files.
                         let added = metaData['stage-1-files'].filter(x => !metaData['uploaded-files'].includes(x));
-                        // added.map((file) => {
-                        //     if (metaData['uploaded-files'].includes(file)) return;
-                        //     else {
-                        //         const putObjectParams = {
-                        //             Bucket: 'dorky',
-                        //             Key: path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'),
-                        //             Body: fs.readFileSync(path.relative(process.cwd(), file)).toString()
-                        //         }
-                        //         // Upload records
-                        //         s3.putObject(putObjectParams, (err, data) => {
-                        //             if (err) {
-                        //                 console.log('Unable to upload file ' + path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'))
-                        //                 console.log(err);
-                        //             }
-                        //             else console.log(chalk.green('Uploaded ' + file));
-                        //         });
-                        //         metaData['uploaded-files'].push(file);
-                        //     }
-                        // });
-                        const removedObjectParams = {
-                            Bucket: 'dorky',
-                            Delete: {
-                                Objects: removed.map((file) => {
-                                    return { Key: file };
-                                }),
-                                Quiet: false
+                        
+                        added.map((file) => {
+                            if (metaData['uploaded-files'].includes(file)) return;
+                            else {
+                                const putObjectParams = {
+                                    Bucket: 'dorky',
+                                    Key: path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'),
+                                    Body: fs.readFileSync(path.relative(process.cwd(), file)).toString()
+                                }
+                                // Upload records
+                                s3.putObject(putObjectParams, (err, data) => {
+                                    if (err) {
+                                        console.log('Unable to upload file ' + path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'))
+                                        console.log(err);
+                                    }
+                                    else console.log(chalk.green('Uploaded ' + file));
+                                });
+                                metaData['uploaded-files'].push(file);
                             }
+                        });
+
+                        if (removed.length) {
+                            const removedObjectParams = {
+                                Bucket: 'dorky',
+                                Delete: {
+                                    Objects: removed.map((file) => {
+                                        return { Key: file };
+                                    }),
+                                    Quiet: true
+                                }
+                            }
+                            // Delete removed records, doesn't delete immediately.
+                            console.log(JSON.stringify(removedObjectParams, 0, 4))
+                            s3.deleteObjects(removedObjectParams, (err, data) => {
+                                if (err) console.log(err.stack);
+                                else console.log('data', data);
+                            });
                         }
-                        console.log(JSON.stringify(removedObjectParams, 0, 4))
-                        // s3.deleteObject(removedObjectParams, (err, data) => {
-                        //     if(err) console.log(err.stack);
-                        //     else console.log('data');
-                        // })
-                        // metaData['uploaded-files'] = Array.from(new Set(metaData['uploaded-files']));
-                        // fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
 
+                        metaData['uploaded-files'] = Array.from(new Set(metaData['stage-1-files']));
+                        fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
 
-                        // putObjectParams = {
-                        //     Bucket: 'dorky',
-                        //     Key: path.relative(process.cwd(), path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
-                        //     Body: JSON.stringify(metaData)
-                        // }
-                        // // Upload metadata.json
-                        // s3.putObject(putObjectParams, (err, data) => {
-                        //     if (err) console.log(err);
-                        //     else console.log(chalk.green('Uploaded metadata'));
-                        // });
-                        // Get added files
+                        putObjectParams = {
+                            Bucket: 'dorky',
+                            Key: path.relative(process.cwd(), path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
+                            Body: JSON.stringify(metaData)
+                        }
+                        // Upload metadata.json
+                        s3.putObject(putObjectParams, (err, data) => {
+                            if (err) console.log(err);
+                            else console.log(chalk.green('Uploaded metadata'));
+                        });
 
                     } else {
-                        // let putObjectParams = {
-                        //     Bucket: 'dorky',
-                        //     Key: rootFolder + '/',
-                        // }
-                        // // Upload root folder.
-                        // s3.putObject(putObjectParams, (err, data) => {
-                        //     if(err) console.log(err);
-                        //     else console.log(data);
-                        // });
 
                         let metaData = JSON.parse(fs.readFileSync(path.join('.dorky', 'metadata.json')).toString());
                         metaData['stage-1-files'].map((file) => {
