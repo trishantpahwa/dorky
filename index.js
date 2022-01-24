@@ -68,7 +68,7 @@ if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_
 
 const args = process.argv.splice(2, 2);
 
-if(args.length == 0) {
+if (args.length == 0) {
     const helpMessage = `Help message:\ninit\t Initializes a dorky project.\nlist\t Lists files in current root directory.\npush\t Pushes changes to S3 bucket.\npull\t Pulls changes from S3 bucket to local root folder.`
     console.log(helpMessage);
 } else if (args.length == 1) {
@@ -189,9 +189,60 @@ if(args.length == 0) {
         }
         rootFolderExists(rootFolder);
     }
-    if(args[0] == 'help') {
+    if (args[0] == 'help') {
         const helpMessage = `Help message:\ninit\t Initializes a dorky project.\nlist\t Lists files in current root directory.\npush\t Pushes changes to S3 bucket.\npull\t Pulls changes from S3 bucket to local root folder.`
         console.log(helpMessage);
+    }
+    if (args[0] == 'pull') {
+        console.log('Pulling files from server.')
+        const rootFolder = process.cwd().split('\\').pop()
+        let s3 = new AWS.S3();
+        const bucketParams = { Bucket: 'dorky' };
+        s3.listObjects(bucketParams, (err, s3Objects) => {
+            if (err) console.log(err);
+            else {
+                if (s3Objects.Contents.filter((object) => object.Key.split('/')[0] == rootFolder).length > 0) {
+                    if (s3Objects.Contents.filter((object) => object.Key == (rootFolder + '/metadata.json')).length > 0) {
+                        const params = {
+                            Bucket: 'dorky',
+                            Key: rootFolder + '/metadata.json'
+                        }
+                        s3.getObject(params, (err, data) => {
+                            if (err) console.error(err);
+                            else {
+                                let metaData = JSON.parse(data.Body.toString());
+                                // Pull metadata.json
+                                const METADATA_FILE = '.dorky/metadata.json';
+                                fs.writeFileSync(METADATA_FILE, JSON.stringify(metaData));
+                                let pullFileParams;
+                                metaData['uploaded-files'].map((file) => {
+                                    pullFileParams = {
+                                        Bucket: 'dorky',
+                                        Key: rootFolder + '/' + file
+                                    }
+                                    s3.getObject(pullFileParams, (err, data) => {
+                                        if (err) console.log(err);
+                                        else {
+                                            console.log('Creating file ' + file);
+                                            let fileData = data.Body.toString();
+                                            let subDirectories = path.relative(process.cwd(), file).split('\\');
+                                            subDirectories.pop()
+                                            subDirectories = subDirectories.join('\\')
+                                            if(subDirectories.length) fs.mkdirSync(subDirectories, { recursive: true });
+                                            fs.writeFileSync(path.relative(process.cwd(), file), fileData);
+                                        }
+                                    })
+                                });
+                            }
+                        });
+                    } else {
+                        console.log('Metadata doesn\'t exist')
+                    }
+                } else {
+                    console.error(chalk.red('Failed to pull folder, as it doesn\'t exist'));
+                }
+            }
+        });
     }
 } else if (args.length == 2) {
     if (args[0] == 'add') {
