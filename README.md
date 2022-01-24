@@ -3,7 +3,8 @@ DevOps Records Keeper
 
 ## Steps to use:
 
-> Setup AWS_ACCESS_KEY and AWS_SECRET_KEY before hand.
+> Setup AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION before hand.
+> Create a S3 bucket with the name `dorky` before start.
 
 ### To push files to S3 bucket.
 1. Create a folder named `dorky` in S3.
@@ -14,5 +15,4 @@ DevOps Records Keeper
 
 ### To pull files from S3 bucket.
 1. Initialize dorky project using `dorky init`.
-2. Use `dorky pull` to pull the status from S3 bucket.
-3. Use `dorky pull-files` to pull the files from S3 bucket.
+2. Use `dorky pull` to pull the files from S3 bucket.
