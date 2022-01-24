@@ -6,6 +6,8 @@ const chalk = require('chalk');
 const fs = require('fs');
 const { EOL } = require('os');
 var AWS = require('aws-sdk');
+const { exit } = require('process');
+
 
 // Initializes project, creates a new .dorky folder, and adds a metadata file to it, and creates a .dorkyignore file.
 function initializeProject() {
@@ -53,8 +55,23 @@ function listFiles() {
     });
 }
 
+if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION) {
+    AWS.config.update({
+        accessKeyId: process.env.AWS_ACCESS_KEY,
+        secretAccessKey: process.env.AWS_SECRET_KEY,
+        region: process.env.AWS_REGION
+    });
+} else {
+    console.log('Set AWS_ACCESS_KEY, AWS_SECRET_KEY and AWS_REGION first.')
+    exit();
+}
+
 const args = process.argv.splice(2, 2);
-if (args.length == 1) {
+
+if(args.length == 0) {
+    const helpMessage = `Help message:\ninit\t Initializes a dorky project.\nlist\t Lists files in current root directory.\npush\t Pushes changes to S3 bucket.\npull\t Pulls changes from S3 bucket to local root folder.`
+    console.log(helpMessage);
+} else if (args.length == 1) {
     if (args[0] == 'init') {
         initializeProject();
     }
@@ -62,12 +79,7 @@ if (args.length == 1) {
         listFiles();
     }
     if (args[0] == 'push') {
-        console.log('pushing files to server.');
-        AWS.config.update({
-            accessKeyId: process.env.AWS_ACCESS_KEY,
-            secretAccessKey: process.env.AWS_SECRET_KEY,
-            region: process.env.AWS_REGION
-        });
+        console.log('Pushing files to server.');
         const rootFolder = process.cwd().split('\\').pop()
 
         function rootFolderExists(rootFolder) {
@@ -82,7 +94,7 @@ if (args.length == 1) {
                         let removed = metaData['uploaded-files'].filter(x => !metaData['stage-1-files'].includes(x));
                         // Uploaded added files.
                         let added = metaData['stage-1-files'].filter(x => !metaData['uploaded-files'].includes(x));
-                        
+
                         added.map((file) => {
                             if (metaData['uploaded-files'].includes(file)) return;
                             else {
@@ -114,26 +126,27 @@ if (args.length == 1) {
                                 }
                             }
                             // Delete removed records, doesn't delete immediately.
-                            console.log(JSON.stringify(removedObjectParams, 0, 4))
                             s3.deleteObjects(removedObjectParams, (err, data) => {
                                 if (err) console.log(err.stack);
-                                else console.log('data', data);
+                                else console.log('Deleted removed files.');
                             });
                         }
-
-                        metaData['uploaded-files'] = Array.from(new Set(metaData['stage-1-files']));
-                        fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
-
-                        putObjectParams = {
-                            Bucket: 'dorky',
-                            Key: path.relative(process.cwd(), path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
-                            Body: JSON.stringify(metaData)
+                        if (metaData['uploaded-files'] != metaData['stage-1-files']) {
+                            metaData['uploaded-files'] = Array.from(new Set(metaData['stage-1-files']));
+                            fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
+                            putObjectParams = {
+                                Bucket: 'dorky',
+                                Key: path.relative(process.cwd(), path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
+                                Body: JSON.stringify(metaData)
+                            }
+                            // Upload metadata.json
+                            s3.putObject(putObjectParams, (err, data) => {
+                                if (err) console.log(err);
+                                else console.log(chalk.green('Uploaded metadata'));
+                            });
+                        } else {
+                            console.log('Nothing to push');
                         }
-                        // Upload metadata.json
-                        s3.putObject(putObjectParams, (err, data) => {
-                            if (err) console.log(err);
-                            else console.log(chalk.green('Uploaded metadata'));
-                        });
 
                     } else {
 
@@ -175,6 +188,10 @@ if (args.length == 1) {
 
         }
         rootFolderExists(rootFolder);
+    }
+    if(args[0] == 'help') {
+        const helpMessage = `Help message:\ninit\t Initializes a dorky project.\nlist\t Lists files in current root directory.\npush\t Pushes changes to S3 bucket.\npull\t Pulls changes from S3 bucket to local root folder.`
+        console.log(helpMessage);
     }
 } else if (args.length == 2) {
     if (args[0] == 'add') {
