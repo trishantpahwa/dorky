@@ -29,6 +29,7 @@ function initializeProject() {
 // Lists all the files that are not excluded explicitly.
 function listFiles() {
     let exclusions = fs.readFileSync('./.dorkyignore').toString().split(EOL);
+    exclusions = exclusions.filter((exclusion) => exclusion !== '');
     if (exclusions[0] == '') exclusions = [];
     var getDirectories = function (src, callback) {
         glob(src + '/**/*', callback);
