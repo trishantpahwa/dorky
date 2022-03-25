@@ -106,7 +106,7 @@ if (args.length == 0) {
                             else {
                                 const putObjectParams = {
                                     Bucket: 'dorky',
-                                    Key: path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'),
+                                    Key: path.join(rootFolder, path.relative(process.cwd(), file)).split('\\').join('/'),
                                     Body: fs.readFileSync(path.relative(process.cwd(), file)).toString()
                                 }
                                 // Upload records
@@ -231,6 +231,7 @@ if (args.length == 0) {
                                         Bucket: 'dorky',
                                         Key: rootFolder + '/' + file
                                     }
+                                    console.log(pullFileParams)
                                     s3.getObject(pullFileParams, (err, data) => {
                                         if (err) console.log(err);
                                         else {
@@ -242,9 +243,7 @@ if (args.length == 0) {
                                             } else if (process.cwd().includes('/')) {
                                                 subDirectories = path.relative(process.cwd(), file).split('/');
                                             } else subDirectories = path.relative(process.cwd(), file)
-                                            console.log(subDirectories)
                                             subDirectories.pop()
-                                            console.log(subDirectories)
                                             if (process.platform === "win32") {
                                                 subDirectories = subDirectories.join('\\')
                                             } else if (process.platform === "linux" || process.platform === "darwin") {
