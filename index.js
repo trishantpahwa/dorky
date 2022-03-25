@@ -81,8 +81,13 @@ if (args.length == 0) {
     }
     if (args[0] == 'push') {
         console.log('Pushing files to server.');
-        const rootFolder = process.cwd().split('\\').pop()
-
+        let rootFolder;
+        if (process.cwd().includes('\\')) {
+            rootFolder = process.cwd().split('\\').pop()
+        } else if (process.cwd().includes('/')) {
+            rootFolder = process.cwd().split('/').pop()
+        } else rootFolder = process.cwd()
+        console.log(rootFolder)
         function rootFolderExists(rootFolder) {
             let s3 = new AWS.S3();
             const bucketParams = { Bucket: 'dorky' };
@@ -196,7 +201,12 @@ if (args.length == 0) {
     }
     if (args[0] == 'pull') {
         console.log('Pulling files from server.')
-        const rootFolder = process.cwd().split('\\').pop()
+        let rootFolder;
+        if (process.cwd().includes('\\')) {
+            rootFolder = process.cwd().split('\\').pop()
+        } else if (process.cwd().includes('/')) {
+            rootFolder = process.cwd().split('/').pop()
+        } else rootFolder = process.cwd()
         let s3 = new AWS.S3();
         const bucketParams = { Bucket: 'dorky' };
         s3.listObjects(bucketParams, (err, s3Objects) => {
@@ -226,10 +236,21 @@ if (args.length == 0) {
                                         else {
                                             console.log('Creating file ' + file);
                                             let fileData = data.Body.toString();
-                                            let subDirectories = path.relative(process.cwd(), file).split('\\');
+                                            let subDirectories;
+                                            if (process.cwd().includes('\\')) {
+                                                subDirectories = path.relative(process.cwd(), file).split('\\');
+                                            } else if (process.cwd().includes('/')) {
+                                                subDirectories = path.relative(process.cwd(), file).split('/');
+                                            } else subDirectories = path.relative(process.cwd(), file)
+                                            console.log(subDirectories)
                                             subDirectories.pop()
-                                            subDirectories = subDirectories.join('\\')
-                                            if(subDirectories.length) fs.mkdirSync(subDirectories, { recursive: true });
+                                            console.log(subDirectories)
+                                            if (process.platform === "win32") {
+                                                subDirectories = subDirectories.join('\\')
+                                            } else if (process.platform === "linux" || process.platform === "darwin") {
+                                                subDirectories = subDirectories.join('/');
+                                            }
+                                            if (subDirectories.length) fs.mkdirSync(subDirectories, { recursive: true });
                                             fs.writeFileSync(path.relative(process.cwd(), file), fileData);
                                         }
                                     })
