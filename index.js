@@ -56,14 +56,14 @@ function listFiles() {
     });
 }
 
-if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION) {
+if (process.env.bucketName && process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION) {
     AWS.config.update({
         accessKeyId: process.env.AWS_ACCESS_KEY,
         secretAccessKey: process.env.AWS_SECRET_KEY,
         region: process.env.AWS_REGION
     });
 } else {
-    console.log('Set AWS_ACCESS_KEY, AWS_SECRET_KEY and AWS_REGION first.')
+    console.log('Set Bucket Name, AWS_ACCESS_KEY, AWS_SECRET_KEY and AWS_REGION first.')
     exit();
 }
 
@@ -90,7 +90,7 @@ if (args.length == 0) {
         console.log(rootFolder)
         function rootFolderExists(rootFolder) {
             let s3 = new AWS.S3();
-            const bucketParams = { Bucket: 'dorky' };
+            const bucketParams = { Bucket: process.env.bucketName };
             s3.listObjects(bucketParams, (err, s3Objects) => {
                 if (err) console.log(err);
                 else {
@@ -208,7 +208,7 @@ if (args.length == 0) {
             rootFolder = process.cwd().split('/').pop()
         } else rootFolder = process.cwd()
         let s3 = new AWS.S3();
-        const bucketParams = { Bucket: 'dorky' };
+        const bucketParams = { Bucket: process.env.bucketName };
         s3.listObjects(bucketParams, (err, s3Objects) => {
             if (err) console.log(err);
             else {
