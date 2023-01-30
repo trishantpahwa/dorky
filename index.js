@@ -56,14 +56,14 @@ function listFiles() {
     });
 }
 
-if (process.env.bucketName && process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION) {
+if (process.env.BUCKET_NAME && process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION) {
     AWS.config.update({
         accessKeyId: process.env.AWS_ACCESS_KEY,
         secretAccessKey: process.env.AWS_SECRET_KEY,
         region: process.env.AWS_REGION
     });
 } else {
-    console.log('Set Bucket Name, AWS_ACCESS_KEY, AWS_SECRET_KEY and AWS_REGION first.')
+    console.log('Set BUCKET_NAME, AWS_ACCESS_KEY, AWS_SECRET_KEY and AWS_REGION first.')
     exit();
 }
 
@@ -90,7 +90,7 @@ if (args.length == 0) {
         console.log(rootFolder)
         function rootFolderExists(rootFolder) {
             let s3 = new AWS.S3();
-            const bucketParams = { Bucket: process.env.bucketName };
+            const bucketParams = { Bucket: process.env.BUCKET_NAME };
             s3.listObjects(bucketParams, (err, s3Objects) => {
                 if (err) console.log(err);
                 else {
@@ -105,7 +105,7 @@ if (args.length == 0) {
                             if (metaData['uploaded-files'].includes(file)) return;
                             else {
                                 const putObjectParams = {
-                                    Bucket: 'dorky',
+                                    Bucket: process.env.BUCKET_NAME,
                                     Key: path.join(rootFolder, path.relative(process.cwd(), file)).split('\\').join('/'),
                                     Body: fs.readFileSync(path.relative(process.cwd(), file)).toString()
                                 }
@@ -123,7 +123,7 @@ if (args.length == 0) {
 
                         if (removed.length) {
                             const removedObjectParams = {
-                                Bucket: 'dorky',
+                                Bucket: process.env.BUCKET_NAME,
                                 Delete: {
                                     Objects: removed.map((file) => {
                                         return { Key: file };
@@ -141,7 +141,7 @@ if (args.length == 0) {
                             metaData['uploaded-files'] = Array.from(new Set(metaData['stage-1-files']));
                             fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
                             putObjectParams = {
-                                Bucket: 'dorky',
+                                Bucket: process.env.BUCKET_NAME,
                                 Key: path.relative(process.cwd(), path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
                                 Body: JSON.stringify(metaData)
                             }
@@ -161,7 +161,7 @@ if (args.length == 0) {
                             if (metaData['uploaded-files'].includes(file)) return;
                             else {
                                 const putObjectParams = {
-                                    Bucket: 'dorky',
+                                    Bucket: process.env.BUCKET_NAME,
                                     Key: path.join(rootFolder, path.relative(process.cwd(), file)).replace(/\\/g, '/'),
                                     Body: fs.readFileSync(path.relative(process.cwd(), file)).toString()
                                 }
@@ -179,7 +179,7 @@ if (args.length == 0) {
                         metaData['uploaded-files'] = Array.from(new Set(metaData['uploaded-files']));
                         fs.writeFileSync(path.join('.dorky', 'metadata.json'), JSON.stringify(metaData));
                         putObjectParams = {
-                            Bucket: 'dorky',
+                            Bucket: process.env.BUCKET_NAME,
                             Key: path.relative(process.cwd(), path.join(rootFolder.toString(), 'metadata.json')).replace(/\\/g, '/'),
                             Body: JSON.stringify(metaData)
                         }
@@ -208,14 +208,14 @@ if (args.length == 0) {
             rootFolder = process.cwd().split('/').pop()
         } else rootFolder = process.cwd()
         let s3 = new AWS.S3();
-        const bucketParams = { Bucket: process.env.bucketName };
+        const bucketParams = { Bucket: process.env.BUCKET_NAME };
         s3.listObjects(bucketParams, (err, s3Objects) => {
             if (err) console.log(err);
             else {
                 if (s3Objects.Contents.filter((object) => object.Key.split('/')[0] == rootFolder).length > 0) {
                     if (s3Objects.Contents.filter((object) => object.Key == (rootFolder + '/metadata.json')).length > 0) {
                         const params = {
-                            Bucket: 'dorky',
+                            Bucket: process.env.BUCKET_NAME,
                             Key: rootFolder + '/metadata.json'
                         }
                         s3.getObject(params, (err, data) => {
@@ -228,7 +228,7 @@ if (args.length == 0) {
                                 let pullFileParams;
                                 metaData['uploaded-files'].map((file) => {
                                     pullFileParams = {
-                                        Bucket: 'dorky',
+                                        Bucket: process.env.BUCKET_NAME,
                                         Key: rootFolder + '/' + file
                                     }
                                     console.log(pullFileParams)
