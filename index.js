@@ -17,7 +17,9 @@ function initializeProject() {
         fs.mkdirSync('.dorky');
         fs.writeFileSync('.dorky/metadata.json', JSON.stringify({ 'stage-1-files': [], 'uploaded-files': [] }));
         if (fs.existsSync('.dorkyignore')) {
-            fs.rmdirSync('.dorky');
+            fs.rmSync('.dorky',{
+                recursive:true
+            });
             console.log('Dorky project already initialized. Remove .dorkyignore file to reinitialize.');
         } else {
             fs.writeFileSync('.dorkyignore', '');
