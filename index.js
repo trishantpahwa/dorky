@@ -72,7 +72,7 @@ if (process.env.BUCKET_NAME && process.env.AWS_ACCESS_KEY && process.env.AWS_SEC
 const args = process.argv.splice(2, 2);
 
 if (args.length == 0) {
-    const helpMessage = `Help message:\ninit\t Initializes a dorky project.\nlist\t Lists files in current root directory.\npush\t Pushes changes to S3 bucket.\npull\t Pulls changes from S3 bucket to local root folder.`
+    const helpMessage = `Help message:-\n\ninit\t\t\t Initializes a dorky project.\nlist\t\t\t Lists files in current root directory.\npush\t\t\t Pushes changes to S3 bucket.\npull\t\t\t Pulls changes from S3 bucket to local root folder.\nadd <filename>\t\t Add file to stage-1.\nreset <filename>\t remove file from stage-1.\n`
     console.log(helpMessage);
 } else if (args.length == 1) {
     if (args[0] == 'init') {
@@ -198,7 +198,7 @@ if (args.length == 0) {
         rootFolderExists(rootFolder);
     }
     if (args[0] == 'help') {
-        const helpMessage = `Help message:\ninit\t Initializes a dorky project.\nlist\t Lists files in current root directory.\npush\t Pushes changes to S3 bucket.\npull\t Pulls changes from S3 bucket to local root folder.`
+        const helpMessage = `Help message:-\n\ninit\t\t\t Initializes a dorky project.\nlist\t\t\t Lists files in current root directory.\npush\t\t\t Pushes changes to S3 bucket.\npull\t\t\t Pulls changes from S3 bucket to local root folder.\nadd <filename>\t\t Add file to stage-1.\nreset <filename>\t remove file from stage-1.\n`
         console.log(helpMessage);
     }
     if (args[0] == 'pull') {
