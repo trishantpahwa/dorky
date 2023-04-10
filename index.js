@@ -259,7 +259,12 @@ function pushChanges() {
         const uploadResponse = await s3Client.send(
           new PutObjectCommand(putObjectParams)
         );
-        if (uploadResponse) console.log(chalk.green("Uploaded " + file));
+        if (uploadResponse)
+          console.log(
+            chalk.green(
+              "Uploaded " + path.join(rootFolder.toString(), "metadata.json")
+            )
+          );
       } catch (err) {
         console.log(
           "Unable to upload file " +
@@ -428,7 +433,7 @@ if (
   } else {
     console.log(
       chalk.red(
-        "Unable to find .dorky folder, please reinitialize the project in the root folder."
+        "Unable to find .dorky folder, please reinitialize the project in the root folder or set the BUCKET_NAME, AWS_ACCESS_KEY, AWS_SECRET_KEY and AWS_REGION in environment variables."
       )
     );
     exit();
