@@ -21,6 +21,5 @@ jobs:
             - run: npm install
             - name: 🚀 publish
               run: npm publish --access public
-              working-directory: dorky
               env:
                   NODE_AUTH_TOKEN: ${{secrets.NPM_AUTH_TOKEN}}
