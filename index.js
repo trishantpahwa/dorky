@@ -122,9 +122,9 @@ function pushChanges() {
           } catch (err) {
             console.log(
               "Unable to upload file " +
-                path
-                  .join(rootFolder, path.relative(process.cwd(), file))
-                  .replace(/\\/g, "/")
+              path
+                .join(rootFolder, path.relative(process.cwd(), file))
+                .replace(/\\/g, "/")
             );
             console.log(err);
           }
@@ -188,15 +188,15 @@ function pushChanges() {
         } catch (err) {
           console.log(
             "Unable to upload file " +
-              path
-                .join(
-                  rootFolder,
-                  path.relative(
-                    process.cwd(),
-                    path.join(rootFolder.toString(), "metadata.json")
-                  )
+            path
+              .join(
+                rootFolder,
+                path.relative(
+                  process.cwd(),
+                  path.join(rootFolder.toString(), "metadata.json")
                 )
-                .replace(/\\/g, "/")
+              )
+              .replace(/\\/g, "/")
           );
           console.log(err);
         }
@@ -228,9 +228,9 @@ function pushChanges() {
           } catch (err) {
             console.log(
               "Unable to upload file " +
-                path
-                  .join(rootFolder, path.relative(process.cwd(), file))
-                  .replace(/\\/g, "/")
+              path
+                .join(rootFolder, path.relative(process.cwd(), file))
+                .replace(/\\/g, "/")
             );
             console.log(err);
           }
@@ -268,9 +268,9 @@ function pushChanges() {
       } catch (err) {
         console.log(
           "Unable to upload file " +
-            path
-              .join(rootFolder, path.relative(process.cwd(), file))
-              .replace(/\\/g, "/")
+          path
+            .join(rootFolder, path.relative(process.cwd(), file))
+            .replace(/\\/g, "/")
         );
         console.log(err);
       }
@@ -443,6 +443,14 @@ if (
 const args = process.argv.splice(2, 2);
 
 if (args.length == 0) {
+  const figlet = `
+      __            __          
+  .--|  .-----.----|  |--.--.--.
+  |  _  |  _  |   _|    <|  |  |
+  |_____|_____|__| |__|__|___  |
+                         |_____| 
+  `;
+  console.log(figlet);
   const helpMessage = `Help message:\ninit\t Initializes a dorky project.\nlist\t Lists files in current root directory.\npush\t Pushes changes to S3 bucket.\npull\t Pulls changes from S3 bucket to local root folder.`;
   console.log(helpMessage);
 } else if (args.length == 1) {
