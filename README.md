@@ -1,11 +1,31 @@
 # dorky
-DevOps Records Keeper
+```
+     __            __          
+ .--|  .-----.----|  |--.--.--.
+ |  _  |  _  |   _|    <|  |  |
+ |_____|_____|__| |__|__|___  |
+                        |_____|
+```
+
+`DevOps Records Keeper`
+
+[![dorky npm](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
+
+![Made with love in India](https://madewithlove.now.sh/in?heart=true&template=for-the-badge) `&& ` ![javascript](https://img.shields.io/badge/JavaScript-323330?style=for-the-badge&logo=javascript&logoColor=F7DF1E)
+
+Let us assume that we need to create a project.
+
+The project obviously contains some code and some secret variables like database information, API keys, etc. This data cannot be shared on public VCS (GitHub), but at times is required to be accessible remotely to be shared among reliable sources.
+
+Anyhow, we shall store it on a private storage, using **dorky**, that stores it on a S3.
 
 ## Steps to use:
 
-> Setup AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION before hand.
+> Create a S3 bucket, AWS_ACCESS_KEY and AWS_SECRET_KEY.
 
-> Create a S3 bucket with the name `dorky` before start.
+![Dorky Usage](dorky-usage.svg "Dorky usage")
+
+> Please use your own repository, this repository `sample_project` is just for demonstration.
 
 ### To push files to S3 bucket.
 1. Initialize dorky setup in the root folder of your project, using `dorky init`.
