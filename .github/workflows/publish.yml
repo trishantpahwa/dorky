@@ -9,14 +9,16 @@ jobs:
     release:
         name: 🚀 release
         runs-on: ubuntu-latest
+        strategy:
+          matrix:
+            node: [ '18', '16', '14', '10', '8' ]
         steps:
-            - name: 📚 checkout
-              uses: actions/checkout@v2.1.1
-            - name: 🟢 node
-              uses: actions/setup-node@v1.4.2
+            - uses: actions/checkout@v2
+            - name: Setup node
+              uses: actions/setup-node@v1
               with:
-                  node-version: 12
-                  registry-url: https://registry.npmjs.org
+                node-version: ${{ matrix.node }}
+            - run: npm install
             - name: 🚀 publish
               run: npm publish --access public
               working-directory: dorky
