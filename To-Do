@@ -1,0 +1,24 @@
+Add stages for variables.
+Fix workflow with CI instead of npm i.
+Convert to TypeScript.
+
+
+Possible commands to add =>
+- node bin/index.js --init [aws|google-drive]
+- node bin/index.js --add [file-names]
+- node bin/index.js --list
+- node bin/index.js --push
+- node bin/index.js --pull
+
+{
+    "stage-1-files": {
+        "abc.txt": {
+            "mime-type": "text/plain",
+            "checksum": ""
+        }
+    },
+    "uploaded-files": ["uid1"]
+}
+
+checksum of the file contents will be the encrypted string in md5
+option to avoid checksum (used when file size is large)

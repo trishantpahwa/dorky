@@ -1,14 +1,13 @@
 {
   "name": "dorky",
-  "version": "2.0.0",
+  "version": "1.2.2",
   "description": "DevOps Records Keeper.",
-  "main": "bin/index.ts",
+  "main": "index.js",
   "bin": {
-    "dorky": "bin/index.ts"
+    "dorky": "index.js"
   },
   "scripts": {
-    "start": "node bin/index.js",
-    "test": "mocha"
+    "test": "echo \"Error: no test specified\""
   },
   "repository": {
     "type": "git",
@@ -26,16 +25,9 @@
     "url": "https://github.com/trishantpahwa/dorky/issues"
   },
   "homepage": "https://github.com/trishantpahwa/dorky#readme",
-  "devDependencies": {
-    "tsc": "^2.0.4",
-    "typescript": "^5.5.4"
-  },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.309.0",
     "chalk": "^4.1.2",
-    "glob": "^11.0.0",
-    "md5": "^2.3.0",
-    "mime-type": "^4.0.0",
-    "mime-types": "^2.1.35",
-    "yargs": "^17.7.2"
+    "glob": "^7.2.0"
   }
 }
