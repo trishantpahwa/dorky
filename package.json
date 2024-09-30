@@ -2,9 +2,8 @@
   "name": "dorky",
   "version": "2.0.0",
   "description": "DevOps Records Keeper.",
-  "main": "bin/index.ts",
   "bin": {
-    "dorky": "bin/index.ts"
+    "dorky": "bin/index.js"
   },
   "scripts": {
     "start": "node bin/index.js",
@@ -31,6 +30,7 @@
     "typescript": "^5.5.4"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.1",
     "chalk": "^4.1.2",
     "glob": "^11.0.0",
     "md5": "^2.3.0",

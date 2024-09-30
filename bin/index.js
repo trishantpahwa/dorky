@@ -9,6 +9,7 @@ const fs = require("fs");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
 const EOL = require("os").type() == "Darwin" ? "\r\n" : "\n";
+const { GetObjectCommand, PutObjectCommand, S3Client } = require("@aws-sdk/client-s3");
 
 const figlet = `
       __            __          \t
@@ -17,7 +18,7 @@ const figlet = `
   |_____|_____|__| |__|__|___  |\t
                          |_____|\t
 `;
-
+// Should display the process.env.AWS_ACCESS_KEY, process.env.AWS_SECRET_KEY, process.env.AWS_REGION, process.env.BUCKET_NAME to be set
 const usage = `${figlet}`;
 let randomColor = null;
 do {
@@ -54,17 +55,19 @@ function init(storage) {
             console.log(chalk.bgGreen("Created .dorky/metadata.json file."));
             writeFileSync(".dorkyignore", "");
             console.log(chalk.bgGreen("Created .dorkyignore file."));
+            writeFileSync(".dorky/credentials.json", JSON.stringify(credentials, null, 2));
+            console.log(chalk.bgGreen("Created .dorky/credentials.json file."));
         }
     }
     const metaData = { "stage-1-files": {}, "uploaded-files": {} };
     var credentials;
     switch (storage) {
         case "aws":
-            credentials = { storage: "aws", acessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, region: process.env.AWS_REGION };
+            credentials = { storage: "aws", acessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, region: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME }
             setupFilesAndFolders(metaData, credentials);
             break;
         case "google-drive":
-            credentials = { storage: "google-drive" } // Setup credentials
+            credentials = { storage: "google-drive" } // Setup credentials => TP | 2024-09-28 16:04:51
             setupFilesAndFolders(metaData, credentials);
             break;
         default:
@@ -119,23 +122,132 @@ function rm(listOfFiles) {
     else console.log(chalk.red("No files found that can be removed."));
 }
 
+function checkCredentials() {
+    const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
+    // This only works for AWS S3, add credential checker for google drive also, fix this => TP | 2024-09-28 16:04:41
+    if (credentials.accessKey && credentials.secretKey && credentials.region && credentials.bucket) {
+        if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME) {
+            return true;
+        } else {
+            console.log(chalk.red("Please provide credentials in .dorky/credentials.json"));
+            return false;
+        }
+    } else return true;
+}
+
 function push() {
+    if (!checkCredentials()) {
+        console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
+        return;
+    }
     console.log("Pushing files to storage");
     const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
     const stage1Files = metaData["stage-1-files"];
-    const pushedFiles = Object.keys(metaData["stage-1-files"]).filter((file) => !Object.keys(metaData["uploaded-files"]).includes(file)); // filesToPush or pushedFiles => TP | 2024-08-09 13:36:47
-    metaData["uploaded-files"] = stage1Files;
-    // Push files to storage
+    const pushedFiles = metaData["uploaded-files"];
+    var filesToPush = [];
+    Object.keys(stage1Files).map((file) => {
+        if (pushedFiles[file]) {
+            if (stage1Files[file]["hash"] != pushedFiles[file]["hash"]) filesToPush.push(file);
+        } else filesToPush.push(file);
+    });
+    filesToPush = filesToPush.map((file) => {
+        return {
+            "name": file,
+            "mime-type": stage1Files[file]["mime-type"],
+            "hash": stage1Files[file]["hash"]
+        }
+    });
+    const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
+    if (filesToPush.length == 0) {
+        console.log(chalk.red("No files to push"));
+        return;
+    }
+    switch (credentials.storage) {
+        case "aws":
+            pushToS3(filesToPush, credentials);
+            break;
+        case "google-drive":
+            pushToGoogleDrive(filesToPush, credentials);
+            break;
+        default:
+            console.log("Please provide a valid storage option <aws|google-drive>");
+            break;
+    }
+    metaData["uploaded-files"] = metaData["stage-1-files"];
     fs.writeFileSync(".dorky/metadata.json", JSON.stringify(metaData, null, 2));
-    if (pushedFiles.length > 0) pushedFiles.map((file) => console.log(chalk.green(`Pushed ${file} to storage.`)));
-    else console.log(chalk.red("No file to push"));
+    console.log(chalk.green("Pushed files to storage"));
+}
+
+function pushToS3(files, credentials) {
+    const s3 = new S3Client({
+        credentials: {
+            accessKeyId: credentials.acessKey ?? process.env.AWS_ACCESS_KEY,
+            secretAccessKey: credentials.secretKey ?? process.env.AWS_SECRET_KEY
+        },
+        region: credentials.awsRegion ?? process.env.AWS_REGION
+    });
+    const bucketName = credentials.bucket ?? process.env.BUCKET_NAME;
+    Promise.all(files.map(async (file) => {
+        await s3.send(
+            new PutObjectCommand({
+                Bucket: bucketName,
+                Key: file.name,
+                Body: fs.readFileSync(file.name).toString(),
+            })
+        );
+        console.log(chalk.green(`Pushed ${file.name} to storage.`));
+    }));
+}
+
+function pushToGoogleDrive(files, credentials) {
+    console.log("Uploading to google drive");
 }
 
 function pull() {
+    if (!checkCredentials()) {
+        console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
+        return;
+    }
     console.log("Pulling files from storage");
     const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    const uploadedFiles = Object.keys(metaData["uploaded-files"]);
-    console.log(uploadedFiles);
+    const filesToPull = metaData["uploaded-files"];
+    const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
+    switch (credentials.storage) {
+        case "aws":
+            pullFromS3(filesToPull, credentials);
+            break;
+        case "google-drive":
+            pullFromGoogleDrive();
+            break;
+        default:
+            console.log("Please provide a valid storage option <aws|google-drive>");
+            break;
+    }
+}
+
+function pullFromS3(files, credentials) {
+    const s3 = new S3Client({
+        credentials: {
+            accessKeyId: credentials.acessKey ?? process.env.AWS_ACCESS_KEY,
+            secretAccessKey: credentials.secretKey ?? process.env.AWS_SECRET_KEY
+        },
+        region: credentials.awsRegion ?? process.env.AWS_REGION
+    });
+    const bucketName = credentials.bucket ?? process.env.BUCKET_NAME;
+    Promise.all(Object.keys(files).map(async (file) => {
+        const { Body } = await s3.send(
+            new GetObjectCommand({
+                Bucket: bucketName,
+                Key: file,
+            })
+        );
+        fs.writeFileSync(file, await Body.transformToString());
+        console.log(chalk.green(`Pulled ${file} from storage.`));
+    }));
+}
+
+function pullFromGoogleDrive(files, credentials) {
+    console.log("Downloading from google drive");
 }
 
 if (Object.keys(args).includes("init")) init(args.init);

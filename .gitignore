@@ -108,4 +108,5 @@ dist
 
 .dorky/.credentials
 
-check-google-drive/credentials.json
+check-google-drive/
+test
