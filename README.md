@@ -26,7 +26,7 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 
 > Create a S3 bucket, AWS_ACCESS_KEY and AWS_SECRET_KEY.
 
-![Dorky Usage](dorky-usage.svg "Dorky usage")
+![Dorky Usage](dorky-usage-aws.svg "Dorky usage")
 
 > Please use your own repository, this repository `sample_project` is just for demonstration.
 
@@ -56,7 +56,7 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 
 ### Steps to use with Google Drive:
 
-![Dorky Usage](dorky-usage.svg "Dorky usage")
+![Dorky Usage](dorky-usage-google-drive.svg "Dorky usage")
 
 > Please use your own repository, this repository `sample_project` is just for demonstration.
 
