@@ -55,6 +55,13 @@ if (Object.keys(args).length == 2) {
     yargs.showHelp()
 }
 
+function checkIfDorkyProject() {
+    if (!existsSync(".dorky") && !existsSync(".dorkyignore")) {
+        console.log(chalk.red("This is not a dorky project. Please run `dorky --init [aws|google-drive]` to initialize a dorky project."));
+        process.exit(1);
+    }
+}
+
 function setupFilesAndFolders(metaData, credentials) {
     console.log("Initializing dorky project");
     if (existsSync(".dorky")) {
@@ -112,17 +119,19 @@ async function init(storage) {
 }
 
 async function list() {
+    checkIfDorkyProject();
     console.log(chalk.red("Listing files that can be added:"));
-    const exclusions = fs.readFileSync(".dorkyignore").toString().split(EOL);
+    var exclusions = fs.readFileSync(".dorkyignore").toString().split(EOL);
+    exclusions = exclusions.filter((exclusion) => exclusion !== "");
     const src = process.cwd();
-    const files = await glob(path.join(src, "**/*"));
+    const files = await glob(path.join(src, "**/*"), { dot: true });
     const filteredFiles = files.filter((file) => {
         for (let i = 0; i < exclusions.length; i++) {
             if (file.includes(exclusions[i])) return false;
         }
         return true;
     });
-    filteredFiles.forEach((file) => console.log(chalk.red(`- ${file}`)));
+    filteredFiles.forEach((file) => console.log(chalk.red(`- ${path.relative(process.cwd(), file)}`)));
     console.log(chalk.green("\nList of files that are already added:"));
     const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
     const addedFiles = Object.keys(metaData["stage-1-files"]);
@@ -130,6 +139,7 @@ async function list() {
 }
 
 function add(listOfFiles) {
+    checkIfDorkyProject();
     console.log("Adding files to stage-1 to push to storage");
     const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
     listOfFiles.forEach((file) => {
@@ -149,6 +159,7 @@ function add(listOfFiles) {
 }
 
 function rm(listOfFiles) {
+    checkIfDorkyProject();
     console.log(chalk.red("Removing files from stage-1"));
     const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
     listOfFiles = listOfFiles.filter((file) => {
@@ -175,6 +186,7 @@ function checkCredentials() {
 }
 
 function push() {
+    checkIfDorkyProject();
     if (!checkCredentials()) {
         console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
         return;
@@ -293,6 +305,7 @@ async function pushToGoogleDrive(files) {
 }
 
 function pull() {
+    checkIfDorkyProject();
     if (!checkCredentials()) {
         console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
         return;
