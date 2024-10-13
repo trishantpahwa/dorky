@@ -33,7 +33,6 @@ do {
     const randomHex = Math.floor(Math.random() * 16777215).toString(16);
     randomColor = `#${randomHex}`;
 } while (randomColor[2] === "f" || randomColor[3] === "f");
-// randomColor[2].match(/[a-f]/g).length ? true : false || randomColor[3].match(/[a-f]/g).length ? true : false
 console.log(chalk.bgHex(randomColor)(usage));
 
 if (process.argv.slice(2).length === 0) {
@@ -368,19 +367,6 @@ async function pullFromGoogleDrive(files) {
             }
             fs.writeFileSync(file.name, await _file.data.text(), "utf-8");
             console.log(chalk.green(`Pulled ${file.name} from storage.`));
-            //         const res = await drive.files.list({
-            //             q: `name='${file.name}'`,
-            //             fields: 'files(id, name)',
-            //             spaces: 'drive'
-            //         });
-            //         const _file = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
-            //         fs.writeFile(file.name, await _file.data.text(), "utf-8", (err) => {
-            //             if (err) {
-            //                 console.log(err);
-            //                 throw err;
-            //             }
-            //             console.log(chalk.green(`Pulled ${file.name} from storage.`));
-            //         });
         });
     } catch (err) {
         throw err;
