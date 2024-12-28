@@ -85,5 +85,4 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 ## To-Do
 
 [ ] Add stages for variables.
-[ ] Convert to TypeScript.
 
