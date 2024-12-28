@@ -8,7 +8,7 @@
                         |_____|
 ```
 
-`DevOps Records Keeper`
+[`DevOps Records Keeper`](https://dorky.trishantpahwa.me/)
 
 [![dorky npm](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
 
