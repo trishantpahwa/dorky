@@ -104,7 +104,7 @@ async function init(storage) {
     var credentials;
     switch (storage) {
         case "aws":
-            credentials = { storage: "aws", acessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, region: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME }
+            credentials = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME }
             setupFilesAndFolders(metaData, credentials);
             break;
         case "google-drive":
@@ -172,22 +172,53 @@ function rm(listOfFiles) {
     else console.log(chalk.red("No files found that can be removed."));
 }
 
-function checkCredentials() {
-    const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
-    // This only works for AWS S3, add credential checker for google drive also, fix this => TP | 2024-09-28 16:04:41
-    if (credentials.accessKey && credentials.secretKey && credentials.region && credentials.bucket) {
-        if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME) {
-            return true;
+async function checkCredentials() {
+    try {
+        if (fs.existsSync(".dorky/credentials.json")) {
+            const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
+            if (credentials.storage === "google-drive") {
+                if (credentials.access_token && credentials.scope && credentials.token_type && credentials.expiry_date) return true;
+                else return false;
+            } else {
+                if (credentials.accessKey && credentials.secretKey && credentials.awsRegion && credentials.bucket) return true;
+                else return false;
+            }
         } else {
-            console.log(chalk.red("Please provide credentials in .dorky/credentials.json"));
-            return false;
+            console.log("Setting the credentials again.")
+            if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME) {
+                fs.writeFileSync(".dorky/credentials.json", JSON.stringify({
+                    "storage": "aws",
+                    "accessKey": process.env.AWS_ACCESS_KEY,
+                    "secretKey": process.env.AWS_SECRET_KEY,
+                    "awsRegion": process.env.AWS_REGION,
+                    "bucket": process.env.BUCKET_NAME
+                }, null, 2));
+                return true;
+            } else {
+                try {
+                    let credentials;
+                    const client = await authorizeGoogleDriveClient();
+                    credentials = { storage: "google-drive", ...client.credentials };
+                    fs.writeFileSync(".dorky/credentials.json", JSON.stringify(credentials, null, 2));
+                    console.log(chalk.green("Credentials saved in .dorky/credentials.json"));
+                    console.log(chalk.red("Please ignore the warning to set credentials below and run the command again."));
+                    return false;
+                } catch (err) {
+                    console.log(chalk.red("Failed to authorize Google Drive client: " + err.message));
+                    console.log(chalk.red("Please provide credentials in .dorky/credentials.json"));
+                    return false;
+                }
+            }
         }
-    } else return true;
+    } catch (err) {
+        console.log(chalk.red("Please provide credentials in .dorky/credentials.json"));
+        return false;
+    }
 }
 
-function push() {
+async function push() {
     checkIfDorkyProject();
-    if (!checkCredentials()) {
+    if (!(await checkCredentials())) {
         console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
         return;
     }
@@ -228,7 +259,7 @@ function push() {
 function pushToS3(files, credentials) {
     const s3 = new S3Client({
         credentials: {
-            accessKeyId: credentials.acessKey ?? process.env.AWS_ACCESS_KEY,
+            accessKeyId: credentials.accessKey ?? process.env.AWS_ACCESS_KEY,
             secretAccessKey: credentials.secretKey ?? process.env.AWS_SECRET_KEY
         },
         region: credentials.awsRegion ?? process.env.AWS_REGION
@@ -304,9 +335,9 @@ async function pushToGoogleDrive(files) {
     }
 }
 
-function pull() {
+async function pull() {
     checkIfDorkyProject();
-    if (!checkCredentials()) {
+    if (!(await checkCredentials())) {
         console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
         return;
     }
@@ -330,7 +361,7 @@ function pull() {
 function pullFromS3(files, credentials) {
     const s3 = new S3Client({
         credentials: {
-            accessKeyId: credentials.acessKey ?? process.env.AWS_ACCESS_KEY,
+            accessKeyId: credentials.accessKey ?? process.env.AWS_ACCESS_KEY,
             secretAccessKey: credentials.secretKey ?? process.env.AWS_SECRET_KEY
         },
         region: credentials.awsRegion ?? process.env.AWS_REGION

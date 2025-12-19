@@ -8,7 +8,7 @@
                         |_____|
 ```
 
-`DevOps Records Keeper`
+[`DevOps Records Keeper`](https://dorky.trishantpahwa.me/)
 
 [![dorky npm](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
 
@@ -85,5 +85,4 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 ## To-Do
 
 [ ] Add stages for variables.
-[ ] Convert to TypeScript.
 
