@@ -33,7 +33,7 @@
     "@aws-sdk/client-s3": "^3.658.1",
     "@google-cloud/local-auth": "^3.0.1",
     "chalk": "^4.1.2",
-    "glob": "^11.0.0",
+    "glob": "^11.1.0",
     "googleapis": "^144.0.0",
     "md5": "^2.3.0",
     "mime-type": "^4.0.0",
