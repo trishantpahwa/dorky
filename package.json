@@ -1,6 +1,6 @@
 {
   "name": "dorky",
-  "version": "2.1.7",
+  "version": "2.1.8",
   "description": "DevOps Records Keeper.",
   "bin": {
     "dorky": "bin/index.js"
