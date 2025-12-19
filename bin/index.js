@@ -120,7 +120,11 @@ async function init(storage) {
 
 async function list() {
     checkIfDorkyProject();
-    console.log(chalk.red("Listing files that can be added:"));
+    console.log(chalk.green("List of files that are already added:"));
+    const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
+    const addedFiles = Object.keys(metaData["stage-1-files"]);
+    addedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
+    console.log(chalk.red("\nListing files that can be added:"));
     var exclusions = fs.readFileSync(".dorkyignore").toString().split(EOL);
     exclusions = exclusions.filter((exclusion) => exclusion !== "");
     const src = process.cwd();
@@ -131,11 +135,11 @@ async function list() {
         }
         return true;
     });
-    filteredFiles.forEach((file) => console.log(chalk.red(`- ${path.relative(process.cwd(), file)}`)));
-    console.log(chalk.green("\nList of files that are already added:"));
-    const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    const addedFiles = Object.keys(metaData["stage-1-files"]);
-    addedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
+    const filesNotYetAdded = filteredFiles.filter((file) => {
+        const relativePath = path.relative(process.cwd(), file);
+        return !addedFiles.includes(relativePath) && fs.statSync(file).isFile();
+    });
+    filesNotYetAdded.forEach((file) => console.log(chalk.red(`- ${path.relative(process.cwd(), file)}`)));
 }
 
 function add(listOfFiles) {
