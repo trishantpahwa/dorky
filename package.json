@@ -1,6 +1,6 @@
 {
   "name": "dorky",
-  "version": "2.1.7",
+  "version": "2.1.8",
   "description": "DevOps Records Keeper.",
   "bin": {
     "dorky": "bin/index.js"
@@ -30,7 +30,7 @@
     "typescript": "^5.5.4"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.658.1",
+    "@aws-sdk/client-s3": "^3.679.0",
     "@google-cloud/local-auth": "^3.0.1",
     "chalk": "^4.1.2",
     "glob": "^11.1.0",
