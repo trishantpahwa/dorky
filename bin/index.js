@@ -38,7 +38,6 @@ console.log(chalk.bgHex(randomColor)(usage));
 if (process.argv.slice(2).length === 0) {
     process.argv.push("--help");
 }
-
 var args = yargs
     .option("init", { alias: "i", describe: "Initialize dorky project", type: "string", demandOption: false })
     .option("list", { alias: "l", describe: "List files in dorky", type: "string", demandOption: false })
@@ -47,6 +46,15 @@ var args = yargs
     .option("push", { alias: "ph", describe: "Push files to storage", type: "string", demandOption: false })
     .option("pull", { alias: "pl", describe: "Pull files from storage", type: "string", demandOption: false })
     .option("migrate", { alias: "m", describe: "Migrate dorky project to another storage", type: "string", demandOption: false })
+    .example('$0 --init aws', 'Initialize a dorky project with AWS storage')
+    .example('$0 --init google-drive', 'Initialize a dorky project with Google Drive storage')
+    .example('$0 --list', 'List local files that can be added and already added files')
+    .example('$0 --list remote', 'List files in remote storage')
+    .example('$0 --add file1.txt file2.js', 'Add specific files to stage-1')
+    .example('$0 --rm file1.txt', 'Remove a file from stage-1')
+    .example('$0 --push', 'Push staged files to storage')
+    .example('$0 --pull', 'Pull files from storage')
+    .example('$0 --migrate aws', 'Migrate the project to AWS storage')
     .help('help')
     .strict()
     .argv
@@ -118,28 +126,37 @@ async function init(storage) {
     }
 }
 
-async function list() {
+async function list(type) {
     checkIfDorkyProject();
-    console.log(chalk.green("List of files that are already added:"));
     const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    const addedFiles = Object.keys(metaData["stage-1-files"]);
-    addedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
-    console.log(chalk.red("\nListing files that can be added:"));
-    var exclusions = fs.readFileSync(".dorkyignore").toString().split(EOL);
-    exclusions = exclusions.filter((exclusion) => exclusion !== "");
-    const src = process.cwd();
-    const files = await glob(path.join(src, "**/*"), { dot: true });
-    const filteredFiles = files.filter((file) => {
-        for (let i = 0; i < exclusions.length; i++) {
-            if (file.includes(exclusions[i])) return false;
-        }
-        return true;
-    });
-    const filesNotYetAdded = filteredFiles.filter((file) => {
-        const relativePath = path.relative(process.cwd(), file);
-        return !addedFiles.includes(relativePath) && fs.statSync(file).isFile();
-    });
-    filesNotYetAdded.forEach((file) => console.log(chalk.red(`- ${path.relative(process.cwd(), file)}`)));
+    switch (type) {
+        case "remote":
+            const uploadedFiles = Object.keys(metaData["uploaded-files"]);
+            if (uploadedFiles.length === 0) {
+                console.log(chalk.red("No files found in remote storage."));
+                return;
+            }
+            console.log(chalk.green("Listing files in stage-1:"));
+            uploadedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
+            break;
+        default:
+            console.log(chalk.red("Listing files that can be added:"));
+            var exclusions = fs.readFileSync(".dorkyignore").toString().split(EOL);
+            exclusions = exclusions.filter((exclusion) => exclusion !== "");
+            const src = process.cwd();
+            const files = await glob(path.join(src, "**/*"), { dot: true });
+            const filteredFiles = files.filter((file) => {
+                for (let i = 0; i < exclusions.length; i++) {
+                    if (file.includes(exclusions[i])) return false;
+                }
+                return true;
+            });
+            filteredFiles.forEach((file) => console.log(chalk.red(`- ${path.relative(process.cwd(), file)}`)));
+            console.log(chalk.green("\nList of files that are already added:"));
+            const addedFiles = Object.keys(metaData["stage-1-files"]);
+            addedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
+            break;
+    }
 }
 
 function add(listOfFiles) {
