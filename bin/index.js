@@ -151,7 +151,14 @@ async function list(type) {
                 }
                 return true;
             });
-            filteredFiles.forEach((file) => console.log(chalk.red(`- ${path.relative(process.cwd(), file)}`)));
+            filteredFiles.forEach((file) => {
+                const relativePath = path.relative(process.cwd(), file);
+                if (relativePath.includes('.env') || relativePath.includes('.config')) {
+                    console.log(chalk.bold.bgYellowBright.red(`- ${relativePath} (This file might be sensitive, please add it to dorky if needed)`));
+                } else {
+                    console.log(chalk.red(`- ${relativePath}`));
+                }
+            });
             console.log(chalk.green("\nList of files that are already added:"));
             const addedFiles = Object.keys(metaData["stage-1-files"]);
             addedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
