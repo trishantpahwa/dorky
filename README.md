@@ -85,9 +85,9 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 ## To-Do
 
 [*] List remote files in dorky bucket.
-[ ] Auto detect .env and .config files.
-[ ] Extension for VS Code to list and highlight them like git.
+[*] Auto detect .env and .config files.
 [ ] Handle errors.
+[ ] Extension for VS Code to list and highlight them like git.
 [ ] Unintialize dorky setup.
 [ ] MCP server.
 [ ] Encryption of files.
