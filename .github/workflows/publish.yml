@@ -1,9 +1,9 @@
 name: "🚀 Publish on npm"
 
 on:
-  push:
-    branches:
-      - main
+    push:
+        branches:
+            - main
 
 jobs:
     release:
@@ -15,8 +15,8 @@ jobs:
             - name: Setup node
               uses: actions/setup-node@v3
               with:
-                node-version: "16.x"
-                registry-url: 'https://registry.npmjs.org'
+                  node-version: "24.x"
+                  registry-url: "https://registry.npmjs.org"
             - run: npm install
             - name: 🚀 publish
               run: npm publish --access public
