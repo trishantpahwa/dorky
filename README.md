@@ -87,6 +87,7 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 [*] List remote files in dorky bucket.
 [*] Auto detect .env and .config files.
 [*] Update node version to latest LTS.
+[*] Ignore dorky files in dorky itself.
 [ ] Handle errors.
 [ ] Extension for VS Code to list and highlight them like git.
 [ ] Unintialize dorky setup.

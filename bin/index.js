@@ -149,6 +149,9 @@ async function list(type) {
                 for (let i = 0; i < exclusions.length; i++) {
                     if (file.includes(exclusions[i])) return false;
                 }
+                if (file.includes(".dorky/")) return false;
+                if (file.endsWith(".dorky") && fs.lstatSync(file).isDirectory()) return false;
+                if (file.endsWith(".dorkyignore")) return false;
                 return true;
             });
             filteredFiles.forEach((file) => {
