@@ -89,10 +89,13 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 [*] Update node version to latest LTS.
 [*] Ignore dorky files in dorky itself.
 [*] Update .gitignore automatically, to ignore .dorky/credentials.json.
-[ ] Handle reauthentication loop for google-drive.
-[ ] Extension for VS Code to list and highlight them like git.
-[ ] Unintialize dorky setup.
-[ ] MCP server.
-[ ] Encryption of files.
-[ ] Add stages for variables.
+[*] Handle reauthentication loop for google-drive. (Bug fix release)
+[ ] Fix error while adding a file that does not exist, it does give an error but still prints that an entry is added.
+[ ] Fix issue when the file is added again with the same contents, it still adds it, not checks it with the hash.
+[ ] Handle invalid access token for google-drive.
+[ ] Extension for VS Code to list and highlight them like git. (Major release)
+[ ] Unintialize dorky setup. (Bug fix release)
+[ ] MCP server. (Minor release)
+[ ] Encryption of files. (Minor release)
+[ ] Add stages for variables. (Major release)
 
