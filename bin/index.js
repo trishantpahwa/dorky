@@ -86,6 +86,19 @@ function setupFilesAndFolders(metaData, credentials) {
     }
 }
 
+function updateGitIgnore() {
+    let gitignoreContent = "";
+    if (existsSync(".gitignore")) {
+        gitignoreContent = fs.readFileSync(".gitignore").toString();
+    }
+    const dorkyIgnoreEntry = ".dorky/credentials.json";
+    if (!gitignoreContent.includes(dorkyIgnoreEntry)) {
+        gitignoreContent += EOL + dorkyIgnoreEntry + EOL;
+        fs.writeFileSync(".gitignore", gitignoreContent);
+        console.log(`${chalk.bgGreen("Updated .gitignore to ignore .dorky/credentials.json.")} ${chalk.red("⚠️  This is done to protect your credentials.")}`);
+    }
+}
+
 async function authorizeGoogleDriveClient() {
     async function loadSavedCredentialsIfExist() {
         try {
@@ -124,6 +137,7 @@ async function init(storage) {
             console.log("Please provide a valid storage option <aws|google-drive>");
             break;
     }
+    updateGitIgnore();
 }
 
 async function list(type) {

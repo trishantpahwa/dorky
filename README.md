@@ -88,7 +88,8 @@ Anyhow, we shall store it on a private storage, using **dorky**, that stores it 
 [*] Auto detect .env and .config files.
 [*] Update node version to latest LTS.
 [*] Ignore dorky files in dorky itself.
-[ ] Handle errors.
+[*] Update .gitignore automatically, to ignore .dorky/credentials.json.
+[ ] Handle reauthentication loop for google-drive.
 [ ] Extension for VS Code to list and highlight them like git.
 [ ] Unintialize dorky setup.
 [ ] MCP server.
