@@ -105,12 +105,10 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
             const content = await fs.readFileSync(TOKEN_PATH);
             const savedCredentials = JSON.parse(content);
 
-            // Check if this is OAuth2 credentials (has access_token, refresh_token, etc.)
             if (!savedCredentials.access_token && !savedCredentials.refresh_token) {
                 return null;
             }
 
-            // Load the client secrets to create an OAuth2 client
             const keys = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
             const key = keys.installed || keys.web;
             const oAuth2Client = new google.auth.OAuth2(
@@ -119,7 +117,6 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
                 key.redirect_uris[0]
             );
 
-            // Remove the 'storage' field and set credentials
             const { storage, ...authCredentials } = savedCredentials;
             oAuth2Client.setCredentials(authCredentials);
 
@@ -133,13 +130,10 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
         if (!credentials.expiry_date) {
             return true;
         }
-        // Both Date.now() and expiry_date are in milliseconds since Unix epoch (UTC)
-        // Check if token expires in less than 5 minutes (300000 ms)
         const expiryBuffer = 300000;
         const currentTimeUTC = Date.now();
         const expiryTimeUTC = credentials.expiry_date;
 
-        // Token is expired if current time is past (expiry time - buffer)
         return currentTimeUTC >= (expiryTimeUTC - expiryBuffer);
     }
 
@@ -158,13 +152,11 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
         }
     }
 
-    // If not forcing reauth, try to load existing credentials
     if (!forceReauth) {
         let client = await loadSavedCredentialsIfExist();
         if (client) {
             const credentials = JSON.parse(fs.readFileSync(TOKEN_PATH));
 
-            // Ensure we're using the client's credentials which may have been updated
             const clientCredentials = client.credentials || credentials;
 
             if (await isTokenExpired(clientCredentials)) {
@@ -172,21 +164,18 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
                 if (client) {
                     return client;
                 }
-                // If refresh failed, fall through to full reauth
             } else {
                 return client;
             }
         }
     }
 
-    // Perform full authentication
     client = await authenticate({
         scopes: SCOPES,
         keyfilePath: CREDENTIALS_PATH,
     });
 
-    // Save credentials after full authentication
-    if (client && client.credentials) {
+    if (client && client.credentials && existsSync(path.dirname(TOKEN_PATH))) {
         const credentialsToSave = {
             storage: "google-drive",
             ...client.credentials
@@ -206,7 +195,7 @@ async function init(storage) {
             setupFilesAndFolders(metaData, credentials);
             break;
         case "google-drive":
-            const client = await authorizeGoogleDriveClient(true); // Force reauth on init
+            const client = await authorizeGoogleDriveClient(true);
             credentials = { storage: "google-drive", ...client.credentials };
             setupFilesAndFolders(metaData, credentials);
             break;
@@ -264,6 +253,7 @@ function add(listOfFiles) {
     checkIfDorkyProject();
     console.log("Adding files to stage-1 to push to storage");
     const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
+    const addedFiles = [];
     listOfFiles.forEach((file) => {
         if (!fs.existsSync(file)) {
             console.log(chalk.red(`File ${file} does not exist.`));
@@ -271,13 +261,20 @@ function add(listOfFiles) {
         }
         const fileContents = fs.readFileSync(file);
         const fileType = mimeTypes.lookup(file);
+        const newHash = md5(fileContents);
+        const existingEntry = metaData["stage-1-files"][file];
+        if (existingEntry && existingEntry.hash === newHash) {
+            console.log(chalk.yellow(`File ${file} has no changes, skipping.`));
+            return;
+        }
         metaData["stage-1-files"][file] = {
             "mime-type": fileType ? fileType : "application/octet-stream",
-            "hash": md5(fileContents)
+            "hash": newHash
         };
+        addedFiles.push(file);
     });
     fs.writeFileSync(".dorky/metadata.json", JSON.stringify(metaData, null, 2));
-    listOfFiles.map((file) => console.log(chalk.green(`Added ${file} to stage-1.`)));
+    addedFiles.forEach((file) => console.log(chalk.green(`Added ${file} to stage-1.`)));
 }
 
 function rm(listOfFiles) {
@@ -319,7 +316,7 @@ async function checkCredentials() {
             } else {
                 try {
                     let credentials;
-                    const client = await authorizeGoogleDriveClient(true); // Force reauth when creating new credentials
+                    const client = await authorizeGoogleDriveClient(true);
                     credentials = { storage: "google-drive", ...client.credentials };
                     fs.writeFileSync(".dorky/credentials.json", JSON.stringify(credentials, null, 2));
                     console.log(chalk.green("Credentials saved in .dorky/credentials.json"));
@@ -430,9 +427,8 @@ async function pushToGoogleDrive(files) {
         return parentId;
     }
     console.log("Uploading to google drive");
-    const client = await authorizeGoogleDriveClient(false); // Use existing token if valid
+    const client = await authorizeGoogleDriveClient(false);
 
-    // Update credentials file with potentially refreshed token
     const credentialsToSave = {
         storage: "google-drive",
         ...client.credentials
@@ -521,9 +517,8 @@ async function pullFromGoogleDrive(files) {
         return { name: file, ...files[file] };
     });
 
-    const client = await authorizeGoogleDriveClient(false); // Use existing token if valid
+    const client = await authorizeGoogleDriveClient(false);
 
-    // Update credentials file with potentially refreshed token
     const credentialsToSave = {
         storage: "google-drive",
         ...client.credentials
