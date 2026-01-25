@@ -1,3 +1,11 @@
 test
+tests
+coverage
+.nyc_output
+*.test.js
+vitest.config.js
+.c8rc.json
+TESTING.md
+QUICKSTART-TESTING.md
 check-google-drive
 web-app
