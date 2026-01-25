@@ -14,89 +14,353 @@
 
 ![Made with love in India](https://madewithlove.now.sh/in?heart=true&template=for-the-badge) `&& ` ![javascript](https://img.shields.io/badge/JavaScript-323330?style=for-the-badge&logo=javascript&logoColor=F7DF1E)
 
-Let us assume that we need to create a project.
+## Overview
 
-The project obviously contains some code and some secret variables like database information, API keys, etc. This data cannot be shared on public VCS (GitHub), but at times is required to be accessible remotely to be shared among reliable sources.
+Manage sensitive project files like environment variables, configuration files, and API keys without committing them to public version control. **dorky** securely stores your sensitive files on AWS S3 or Google Drive, making them accessible to authorized team members.
 
-Anyhow, we shall store it on a private storage, using **dorky**, that stores it on a S3 or Google-Drive.
+## Installation
 
-## AWS S3
+```bash
+npm install -g dorky
+```
 
-### Steps to use with S3:
+Or use with npx:
 
-> Create a S3 bucket, AWS_ACCESS_KEY and AWS_SECRET_KEY.
+```bash
+npx dorky --help
+```
+
+## Prerequisites
+
+### AWS S3
+
+1. Create an S3 bucket in your AWS account
+2. Generate AWS credentials (Access Key ID and Secret Access Key)
+3. Set up environment variables:
+
+```bash
+export AWS_ACCESS_KEY="your-access-key"
+export AWS_SECRET_KEY="your-secret-key"
+export AWS_REGION="us-east-1"
+export BUCKET_NAME="your-bucket-name"
+```
+
+### Google Drive
+
+1. Create a Google Cloud Project
+2. Enable Google Drive API
+3. Download OAuth 2.0 credentials
+4. Save credentials as `google-drive-credentials.json` in your project root
+
+## Quick Start
+
+### AWS S3 Setup
 
 ![Dorky Usage](dorky-usage-aws.svg "Dorky usage")
 
-> Please use your own repository, this repository `sample_project` is just for demonstration.
+```bash
+# Navigate to your project
+cd your-project
 
-#### To list files in the project.
+# Initialize dorky with AWS
+dorky --init aws
 
-1. Initialize dorky setup in the root folder of your project, using `dorky --init aws`.
-2. List the files using `dorky --list`.
-    > This command will not list the files that are excluded in `.dorkyignore`.
+# List files that can be added
+dorky --list
 
-#### To push files to S3 bucket.
+# Add sensitive files
+dorky --add .env config.yml
 
-1. Initialize dorky setup in the root folder of your project, using `dorky --init aws`.
-2. List the files using `dorky --list`, (make sure to add excluded file or folder patterns to .dorkyignore, to minimize the list).
-3. Add files to stage-1 using `dorky --add file-name`.
-4. Push files to S3 bucket using `dorky --push`.
+# Push to S3
+dorky --push
+```
 
-#### To remove a file from project.
-
-1. Remove files using `dorky --rm file-name`. [Removes file from stage-1 <local>]
-2. Push files to S3 bucket using `dorky --push`. [Removes file from S3 bucket <remote>]
-
-#### To pull files from S3 bucket.
-
-1. Use `dorky --pull` to pull the files from S3 bucket.
-
-## Google Drive
-
-### Steps to use with Google Drive:
+### Google Drive Setup
 
 ![Dorky Usage](dorky-usage-google-drive.svg "Dorky usage")
 
-> Please use your own repository, this repository `sample_project` is just for demonstration.
+```bash
+# Navigate to your project
+cd your-project
 
-#### To list files in the project.
+# Initialize dorky with Google Drive
+dorky --init google-drive
 
-1. Initialize dorky setup in the root folder of your project, using `dorky --init google-drive`.
-2. List the files using `dorky --list`.
-    > This command will not list the files that are excluded in `.dorkyignore`.
+# Authenticate (browser window will open)
+# Follow the OAuth flow
 
-#### To push files to Google Drive.
+# List files that can be added
+dorky --list
 
-1. Initialize dorky setup in the root folder of your project, using `dorky --init google-drive`.
-2. List the files using `dorky --list`, (make sure to add excluded file or folder patterns to .dorkyignore, to minimize the list).
-3. Add files to stage-1 using `dorky --add file-name`.
-4. Push files to Google Drive using `dorky --push`.
+# Add sensitive files
+dorky --add .env secrets.json
 
-#### To remove a file from project.
+# Push to Google Drive
+dorky --push
+```
 
-1. Remove files using `dorky --rm file-name`. [Removes file from stage-1 <local>]
-2. Push files to Google Drive using `dorky --push`. [Removes file from Google Drive <remote>]
+## Usage
 
-#### To pull files from Google Drive.
+### Initialize a Project
 
-1. Use `dorky --pull` to pull the files from Google Drive.
+```bash
+# For AWS S3
+dorky --init aws
 
-## To-Do
+# For Google Drive
+dorky --init google-drive
+```
 
-[*] List remote files in dorky bucket.
-[*] Auto detect .env and .config files.
-[*] Update node version to latest LTS.
-[*] Ignore dorky files in dorky itself.
-[*] Update .gitignore automatically, to ignore .dorky/credentials.json.
-[*] Handle reauthentication loop for google-drive. (Bug fix release)
-[ ] Fix error while adding a file that does not exist, it does give an error but still prints that an entry is added.
-[ ] Update README. (Bug fix release)
-[ ] Fix issue when the file is added again with the same contents, it still adds it, not checks it with the hash.
-[ ] Handle invalid access token for google-drive.
-[ ] Extension for VS Code to list and highlight them like git. (Major release)
-[ ] Unintialize dorky setup. (Bug fix release)
-[ ] MCP server. (Minor release)
-[ ] Encryption of files. (Minor release)
-[ ] Add stages for variables. (Major release)
+This creates:
+
+- `.dorky/` folder with metadata and credentials
+- `.dorkyignore` file for exclusion patterns
+- Updates `.gitignore` to protect credentials
+
+### List Files
+
+```bash
+# List local files (shows what can be added)
+dorky --list
+
+# List remote files (shows what's in storage)
+dorky --list remote
+```
+
+### Add Files to Stage
+
+```bash
+# Add single file
+dorky --add .env
+
+# Add multiple files
+dorky --add .env config.yml secrets.json
+
+# Add files with specific patterns
+dorky --add .env.production .env.staging
+```
+
+### Remove Files from Stage
+
+```bash
+# Remove single file
+dorky --rm .env
+
+# Remove multiple files
+dorky --rm .env config.yml
+```
+
+### Push Files to Storage
+
+```bash
+# Push all staged files
+dorky --push
+```
+
+This command:
+
+- Uploads new files
+- Updates modified files (based on hash comparison)
+- Skips unchanged files
+
+### Pull Files from Storage
+
+```bash
+# Pull all tracked files
+dorky --pull
+```
+
+This command:
+
+- Downloads all tracked files from storage
+- Creates necessary directories
+- Overwrites local files
+
+## Configuration
+
+### .dorkyignore
+
+Exclude files and directories from dorky scanning:
+
+```
+node_modules/
+.git/
+dist/
+build/
+*.log
+coverage/
+```
+
+### Directory Structure
+
+After initialization:
+
+```
+your-project/
+├── .dorky/
+│   ├── credentials.json    # Storage credentials (auto-ignored by git)
+│   └── metadata.json       # Tracked files metadata
+├── .dorkyignore           # Exclusion patterns
+└── .gitignore             # Updated automatically
+```
+
+## Common Workflows
+
+### Workflow 1: Initial Setup for Team
+
+```bash
+# Team lead initializes and pushes files
+dorky --init aws
+dorky --add .env config/secrets.yml
+dorky --push
+
+# Team members pull files
+git clone <repository>
+cd <repository>
+# Set up AWS credentials in environment
+dorky --pull
+```
+
+### Workflow 2: Update Sensitive Configuration
+
+```bash
+# Modify your .env file locally
+vim .env
+
+# Add updated file
+dorky --add .env
+
+# Push changes
+dorky --push
+```
+
+### Workflow 3: Clean Up Tracked Files
+
+```bash
+# Remove from staging
+dorky --rm old-config.yml
+
+# Push to remove from remote
+dorky --push
+```
+
+## Examples
+
+### Example 1: Managing Environment Files
+
+```bash
+# Initialize with AWS
+dorky --init aws
+
+# Add environment files for different stages
+dorky --add .env.development .env.staging .env.production
+
+# Check what will be uploaded
+dorky --list
+
+# Upload to S3
+dorky --push
+
+# View remote files
+dorky --list remote
+```
+
+### Example 2: Managing API Keys
+
+```bash
+# Initialize with Google Drive
+dorky --init google-drive
+
+# Add API key files
+dorky --add config/api-keys.json secrets/tokens.yml
+
+# Push to Google Drive
+dorky --push
+
+# On another machine, pull the files
+dorky --pull
+```
+
+## Features
+
+- ✅ AWS S3 storage integration
+- ✅ Google Drive storage integration
+- ✅ List remote files in dorky bucket
+- ✅ Auto detect .env and .config files
+- ✅ Automatic .gitignore updates to ignore credentials
+- ✅ Handle reauthentication for Google Drive
+- ✅ Token refresh for Google Drive authentication
+- ✅ Ignore dorky files in dorky itself
+- ✅ File hash validation to skip unchanged files
+- ✅ Mime-type detection for file uploads
+- ✅ Recursive folder creation on pull
+
+## How It Works
+
+1. **Initialization**: Creates `.dorky/` folder with metadata and credentials
+2. **File Tracking**: Maintains a hash-based registry of files in `metadata.json`
+3. **Smart Uploads**: Only uploads files that have changed (based on MD5 hash)
+4. **Auto-detection**: Highlights `.env` and `.config` files during listing
+5. **Security**: Automatically updates `.gitignore` to protect credentials
+
+## Security Best Practices
+
+- ✅ Never commit `.dorky/credentials.json` to version control
+- ✅ Use environment variables for AWS credentials
+- ✅ Rotate access keys regularly
+- ✅ Use IAM roles with minimal required permissions
+- ✅ Review `.dorkyignore` before adding files
+- ✅ Keep `google-drive-credentials.json` secure
+
+## Troubleshooting
+
+### AWS S3 Issues
+
+**Error: Missing credentials**
+
+```bash
+# Set environment variables
+export AWS_ACCESS_KEY="your-key"
+export AWS_SECRET_KEY="your-secret"
+export AWS_REGION="us-east-1"
+export BUCKET_NAME="your-bucket"
+```
+
+### Google Drive Issues
+
+**Error: Invalid credentials**
+
+```bash
+# Re-authenticate
+dorky --init google-drive
+```
+
+**Error: Token expired**
+
+- dorky automatically refreshes tokens
+- If issues persist, delete `.dorky/credentials.json` and re-authenticate
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+ISC License - see [LICENSE](LICENSE) file for details.
+
+## Support
+
+- 📦 [npm package](https://npmjs.com/package/dorky)
+- 🐛 [Report issues](https://github.com/trishantpahwa/dorky/issues)
+- 🌐 [Website](https://dorky.trishantpahwa.me/)
+
+## Roadmap
+
+- [ ] Handle invalid access token for Google Drive (edge cases)
+- [ ] Extension for VS Code to list and highlight them like git (Major release)
+- [ ] Uninitialize dorky setup (Bug fix release)
+- [ ] MCP server (Minor release)
+- [ ] Encryption of files (Minor release)
+- [ ] Add stages for variables (Major release)
+- [ ] Migrate dorky project to another storage (partially implemented)
 
