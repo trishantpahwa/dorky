@@ -46,6 +46,39 @@ describe("Dorky CLI - E2E Tests", () => {
         });
     });
 
+    describe("Fail safes", () => {
+
+        it("should warn if already initialized", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+            const result = await runCli(["--init", "aws"], { cwd: testDir });
+            expect(result.all).toContain("Dorky is already initialized");
+        });
+
+        it("should fail checkDorkyProject when running list in uninitialized directory", async () => {
+            const result = await runCli(["--list"], { cwd: testDir });
+            expect(result.exitCode).toBe(1);
+            expect(result.all).toContain("Not a dorky project");
+        });
+
+        it("should fail init with invalid storage", async () => {
+            const result = await runCli(["--init", "invalid-storage"], { cwd: testDir });
+            expect(result.all).toContain("Invalid storage");
+        });
+
+        it("should fail init aws with missing environment variables", async () => {
+            const result = await runCli(["--init", "aws"], {
+                cwd: testDir,
+                env: {
+                    AWS_ACCESS_KEY: "",
+                    AWS_SECRET_KEY: "",
+                    AWS_REGION: "",
+                    BUCKET_NAME: ""
+                }
+            });
+            expect(result.all).toContain("Missing AWS environment variables");
+        });
+    })
+
     describe("Complete Google Drive workdlow", () => {
         it("should complete a full Google Drive workflow: initialize, add files, list, remove, add again, push, delete locally, and pull", async () => {
             // Initialize with Google Drive
