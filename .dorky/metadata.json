@@ -1,0 +1,14 @@
+{
+  "stage-1-files": {
+    ".env": {
+      "mime-type": "application/octet-stream",
+      "hash": "ef690809a391f839b909e303e8d1f888"
+    }
+  },
+  "uploaded-files": {
+    ".env": {
+      "mime-type": "application/octet-stream",
+      "hash": "ef690809a391f839b909e303e8d1f888"
+    }
+  }
+}
