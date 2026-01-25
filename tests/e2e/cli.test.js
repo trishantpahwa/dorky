@@ -1,15 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { runCli } from '../helpers/runCli.js';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { runCli } from "../helpers/runCli.js";
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
 
-describe('Dorky CLI - E2E Tests', () => {
+dotenv.config();
+
+describe("Dorky CLI - E2E Tests", () => {
     let testDir;
 
     beforeEach(() => {
         // Create a temporary directory for each test
-        testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dorky-test-'));
+        testDir = fs.mkdtempSync(path.join(process.cwd(), "dorky-test-"));
     });
 
     afterEach(() => {
@@ -19,24 +21,24 @@ describe('Dorky CLI - E2E Tests', () => {
         }
     });
 
-    describe('Help and Version', () => {
-        it('should display help when --help flag is used', async () => {
-            const result = await runCli(['--help']);
+    describe("Help and Version", () => {
+        it("should display help when --help flag is used", async () => {
+            const result = await runCli(["--help"]);
 
             expect(result.exitCode).toBe(0);
-            expect(result.all).toContain('dorky');
-            expect(result.all).toContain('Options:');
+            expect(result.all).toContain("dorky");
+            expect(result.all).toContain("Options:");
         });
 
-        it('should display help when no arguments are provided', async () => {
+        it("should display help when no arguments are provided", async () => {
             const result = await runCli([]);
 
             expect(result.exitCode).toBe(0);
-            expect(result.all).toContain('dorky');
+            expect(result.all).toContain("dorky");
         });
 
-        it('should display version when --version flag is used', async () => {
-            const result = await runCli(['--version']);
+        it("should display version when --version flag is used", async () => {
+            const result = await runCli(["--version"]);
 
             expect(result.exitCode).toBe(0);
             // The version should match the package.json version
@@ -44,104 +46,95 @@ describe('Dorky CLI - E2E Tests', () => {
         });
     });
 
-    // describe('Init Command', () => {
-    //     it('should initialize a dorky project with AWS', async () => {
-    //         const result = await runCli(['--init', 'aws'], { cwd: testDir });
+    describe("Complete Google Drive workdlow", () => {
+        it("should complete a full Google Drive workflow: initialize, add files, list, remove, add again, push, delete locally, and pull", async () => {
+            // Initialize with Google Drive
+            let result = await runCli(["--init", "google-drive"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //         // Check if .dorky directory was created
-    //         const dorkyDir = path.join(testDir, '.dorky');
-    //         expect(fs.existsSync(dorkyDir)).toBe(true);
-    //     });
+            // Create test files
+            const envFile = path.join(testDir, ".env");
+            fs.writeFileSync(envFile, "secret=google-drive-test");
 
-    //     it('should initialize a dorky project with Google Drive', async () => {
-    //         const result = await runCli(['--init', 'google-drive'], { cwd: testDir });
+            // Add files
+            result = await runCli(["--add", ".env"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //         // Check if .dorky directory was created
-    //         const dorkyDir = path.join(testDir, '.dorky');
-    //         expect(fs.existsSync(dorkyDir)).toBe(true);
-    //     });
+            // List files
+            result = await runCli(["--list"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain(".env");
 
-    //     it('should fail with invalid storage provider', async () => {
-    //         const result = await runCli(['--init', 'invalid-provider'], { cwd: testDir });
+            // Remove files
+            result = await runCli(["--rm", ".env"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //         // Should indicate an error or show help
-    //         expect(result.exitCode).not.toBe(0);
-    //     });
-    // });
+            // Add files again
+            result = await runCli(["--add", ".env"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    // describe('List Command', () => {
-    //     it('should list files when --list flag is used', async () => {
-    //         // First initialize a project
-    //         await runCli(['--init', 'aws'], { cwd: testDir });
+            // Push files to Google Drive
+            result = await runCli(["--push"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //         // Then list files
-    //         const result = await runCli(['--list'], { cwd: testDir });
+            // Delete local .env file
+            fs.unlinkSync(envFile);
+            expect(fs.existsSync(envFile)).toBe(false);
 
-    //         // Should execute without critical errors
-    //         expect(result.exitCode).toBe(0);
-    //     });
-    // });
+            // Pull files from Google Drive
+            result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    // describe('Add Command', () => {
-    //     it('should add files to the dorky project', async () => {
-    //         // Initialize project
-    //         await runCli(['--init', 'aws'], { cwd: testDir });
+            // Verify .env file is restored
+            expect(fs.existsSync(envFile)).toBe(true);
+            const content = fs.readFileSync(envFile, "utf-8");
+            expect(content).toBe("secret=google-drive-test");
+        });
+    });
 
-    //         // Create a test file
-    //         const testFile = path.join(testDir, 'test.txt');
-    //         fs.writeFileSync(testFile, 'test content');
+    describe("Complete AWS S3 workflow", () => {
+        it("should complete a full AWS S3 workflow: initialize, add files, list, remove, add again, push, delete locally, and pull", async () => {
 
-    //         // Add the file
-    //         const result = await runCli(['--add', 'test.txt'], { cwd: testDir });
+            // Initialize with AWS S3
+            let result = await runCli(["--init", "aws"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            // Create test files
+            const envFile = path.join(testDir, ".env");
+            fs.writeFileSync(envFile, "secret=aws-s3-test");
 
-    //         // Should complete successfully
-    //         expect(result.exitCode).toBe(0);
-    //     });
+            // Add files
+            result = await runCli(["--add", ".env"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //     it('should add multiple files at once', async () => {
-    //         // Initialize project
-    //         await runCli(['--init', 'aws'], { cwd: testDir });
+            // List files
+            result = await runCli(["--list"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain(".env");
 
-    //         // Create test files
-    //         fs.writeFileSync(path.join(testDir, 'file1.txt'), 'content 1');
-    //         fs.writeFileSync(path.join(testDir, 'file2.txt'), 'content 2');
+            // Remove files
+            result = await runCli(["--rm", ".env"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //         // Add multiple files
-    //         const result = await runCli(['--add', 'file1.txt', 'file2.txt'], { cwd: testDir });
+            // Add files again
+            result = await runCli(["--add", ".env"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //         expect(result.exitCode).toBe(0);
-    //     });
-    // });
+            // Push files to AWS S3
+            result = await runCli(["--push"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    // describe('Remove Command', () => {
-    //     it('should remove files from the dorky project', async () => {
-    //         // Initialize and add a file first
-    //         await runCli(['--init', 'aws'], { cwd: testDir });
+            // Delete local .env file
+            fs.unlinkSync(envFile);
+            expect(fs.existsSync(envFile)).toBe(false);
 
-    //         const testFile = path.join(testDir, 'test.txt');
-    //         fs.writeFileSync(testFile, 'test content');
-    //         await runCli(['--add', 'test.txt'], { cwd: testDir });
+            // Pull files from AWS S3
+            result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
 
-    //         // Remove the file
-    //         const result = await runCli(['--rm', 'test.txt'], { cwd: testDir });
-
-    //         expect(result.exitCode).toBe(0);
-    //     });
-    // });
-
-    // describe('Error Handling', () => {
-    //     it('should handle commands without initialization gracefully', async () => {
-    //         // Try to list without initializing
-    //         const result = await runCli(['--list'], { cwd: testDir });
-
-    //         // Should either show an error or handle gracefully
-    //         // (actual behavior depends on implementation)
-    //     });
-
-    //     it('should handle invalid command combinations', async () => {
-    //         const result = await runCli(['--init', 'aws', '--list'], { cwd: testDir });
-
-    //         // Should handle multiple commands appropriately
-    //     });
-    // });
+            // Verify .env file is restored
+            expect(fs.existsSync(envFile)).toBe(true);
+            const content = fs.readFileSync(envFile, "utf-8");
+            expect(content).toBe("secret=aws-s3-test");
+        });
+    });
 });
