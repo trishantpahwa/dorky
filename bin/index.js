@@ -200,6 +200,14 @@ async function init(storage) {
     var credentials;
     switch (storage) {
         case "aws":
+            if (!process.env.AWS_ACCESS_KEY || !process.env.AWS_SECRET_KEY || !process.env.AWS_REGION || !process.env.BUCKET_NAME) {
+                console.log(chalk.red("Please set the following environment variables before initializing AWS storage:"));
+                !process.env.AWS_ACCESS_KEY && console.log(chalk.bgRed(`  export AWS_ACCESS_KEY="your-access-key"`));
+                !process.env.AWS_SECRET_KEY && console.log(chalk.bgRed(`  export AWS_SECRET_KEY="your-secret-key"`));
+                !process.env.AWS_REGION && console.log(chalk.bgRed(`  export AWS_REGION="us-east-1"`));
+                !process.env.BUCKET_NAME && console.log(chalk.bgRed(`  export BUCKET_NAME="your-bucket-name"`));
+                return;
+            }
             credentials = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME }
             setupFilesAndFolders(metaData, credentials);
             break;
@@ -379,12 +387,13 @@ async function push() {
             console.log("Please provide a valid storage option <aws|google-drive>");
             break;
     }
+    // This should only update the uploaded-files after successful push => @trishantpahwa | 2026-01-25 17:57:35
     metaData["uploaded-files"] = metaData["stage-1-files"];
     fs.writeFileSync(".dorky/metadata.json", JSON.stringify(metaData, null, 2));
     console.log(chalk.green("Pushed the following files to storage:"));
 }
 
-function pushToS3(files, credentials) {
+function pushToS3(files, credentials, failed = false) {
     const s3 = new S3Client({
         credentials: {
             accessKeyId: credentials.accessKey ?? process.env.AWS_ACCESS_KEY,
@@ -396,14 +405,54 @@ function pushToS3(files, credentials) {
     Promise.all(files.map(async (file) => {
         const rootFolder = path.basename(process.cwd());
         const pathToFile = path.join(rootFolder, file.name);
-        await s3.send(
-            new PutObjectCommand({
-                Bucket: bucketName,
-                Key: pathToFile,
-                Body: fs.readFileSync(file.name).toString(),
-            })
-        );
-        console.log(chalk.green(`Pushed ${pathToFile} to storage.`));
+        try {
+            await s3.send(
+                new PutObjectCommand({
+                    Bucket: bucketName,
+                    Key: pathToFile,
+                    Body: fs.readFileSync(file.name).toString(),
+                })
+            );
+            console.log(chalk.green(`Pushed ${pathToFile} to storage.`));
+        } catch (err) {
+            if (err.name === 'InvalidAccessKeyId' || err.name === 'SignatureDoesNotMatch' ||
+                err.name === 'InvalidClientTokenId' || err.Code === 'InvalidAccessKeyId' ||
+                (err.$metadata && err.$metadata.httpStatusCode === 403)) {
+                console.log(chalk.yellow(`AWS authentication failed. Attempting to use environment variables...`));
+                if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME && !failed) {
+                    const newCredentials = {
+                        storage: "aws",
+                        accessKey: process.env.AWS_ACCESS_KEY,
+                        secretKey: process.env.AWS_SECRET_KEY,
+                        awsRegion: process.env.AWS_REGION,
+                        bucket: process.env.BUCKET_NAME
+                    };
+                    fs.writeFileSync(".dorky/credentials.json", JSON.stringify(newCredentials, null, 2));
+
+                    try {
+                        await pushToS3([file], newCredentials, true);
+                    } catch (err) {
+                        console.log(chalk.red(`Failed after retrying with environment variables`));
+                        console.log(chalk.yellow(`Please set correct environment variables:`));
+                        console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
+                        console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
+                        console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
+                        console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
+                        throw err;
+                    }
+                } else {
+                    console.log(chalk.red(`AWS credentials are invalid and environment variables are not set.`));
+                    console.log(chalk.yellow(`Please set the following environment variables:`));
+                    console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
+                    console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
+                    console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
+                    console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
+                }
+            } else {
+                console.log(chalk.red(`Error uploading ${file.name}: ${err.message}`));
+                throw err;
+            }
+        }
     }));
 }
 
@@ -534,7 +583,7 @@ async function pull() {
     }
 }
 
-function pullFromS3(files, credentials) {
+function pullFromS3(files, credentials, failed = false) {
     const s3 = new S3Client({
         credentials: {
             accessKeyId: credentials.accessKey ?? process.env.AWS_ACCESS_KEY,
@@ -546,18 +595,59 @@ function pullFromS3(files, credentials) {
     Promise.all(Object.keys(files).map(async (file) => {
         const rootFolder = path.basename(process.cwd());
         const pathToFile = path.join(rootFolder, file);
-        const { Body } = await s3.send(
-            new GetObjectCommand({
-                Bucket: bucketName,
-                Key: pathToFile,
-            })
-        );
-        const dir = path.dirname(file);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+
+        try {
+            const { Body } = await s3.send(
+                new GetObjectCommand({
+                    Bucket: bucketName,
+                    Key: pathToFile,
+                })
+            );
+            const dir = path.dirname(file);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            fs.writeFileSync(file, await Body.transformToString());
+            console.log(chalk.green(`Pulled ${file} from storage.`));
+        } catch (err) {
+            if (err.name === 'InvalidAccessKeyId' || err.name === 'SignatureDoesNotMatch' ||
+                err.name === 'InvalidClientTokenId' || err.Code === 'InvalidAccessKeyId' ||
+                (err.$metadata && err.$metadata.httpStatusCode === 403)) {
+                console.log(chalk.yellow(`AWS authentication failed for ${file}. Attempting to use environment variables...`));
+                if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME && !failed) {
+                    const newCredentials = {
+                        storage: "aws",
+                        accessKey: process.env.AWS_ACCESS_KEY,
+                        secretKey: process.env.AWS_SECRET_KEY,
+                        awsRegion: process.env.AWS_REGION,
+                        bucket: process.env.BUCKET_NAME
+                    };
+                    fs.writeFileSync(".dorky/credentials.json", JSON.stringify(newCredentials, null, 2));
+
+                    try {
+                        await pullFromS3({ [file]: files[file] }, newCredentials, true);
+                    } catch (err) {
+                        console.log(chalk.red(`Failed after retrying with environment variables`));
+                        console.log(chalk.yellow(`Please set correct environment variables:`));
+                        console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
+                        console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
+                        console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
+                        console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
+                        throw err;
+                    }
+                } else {
+                    console.log(chalk.red(`AWS credentials are invalid and environment variables are not set.`));
+                    console.log(chalk.yellow(`Please set the following environment variables:`));
+                    console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
+                    console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
+                    console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
+                    console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
+                }
+            } else {
+                console.log(chalk.red(`Error downloading ${file.name}: ${err.message}`));
+                throw err;
+            }
         }
-        fs.writeFileSync(file, await Body.transformToString());
-        console.log(chalk.green(`Pulled ${file} from storage.`));
     }));
 }
 
