@@ -35,8 +35,32 @@ npx dorky --help
 ### AWS S3
 
 1. Create an S3 bucket in your AWS account
-2. Generate AWS credentials (Access Key ID and Secret Access Key)
-3. Set up environment variables:
+2. Create an IAM user with programmatic access
+3. Attach the following IAM policy to the user (replace `your-bucket-name` with your actual bucket name):
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::your-bucket-name",
+                "arn:aws:s3:::your-bucket-name/*"
+            ]
+        }
+    ]
+}
+```
+
+4. Generate AWS credentials (Access Key ID and Secret Access Key) for the IAM user
+5. Set up environment variables:
 
 ```bash
 export AWS_ACCESS_KEY="your-access-key"
@@ -356,6 +380,7 @@ ISC License - see [LICENSE](LICENSE) file for details.
 
 ## Roadmap
 
+- [x] Update README with AWS IAM policy (bug fix release)
 - [ ] Handle invalid access token for Google Drive (edge cases)
 - [ ] Extension for VS Code to list and highlight them like git (Major release)
 - [ ] Uninitialize dorky setup (Bug fix release)
