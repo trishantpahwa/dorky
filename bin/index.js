@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 const yargs = require("yargs");
-const { existsSync, mkdirSync, writeFileSync } = require("fs");
+const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync } = require("fs");
 const chalk = require("chalk");
 const { glob } = require("glob");
 const path = require("path");
-const fs = require("fs");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
 const EOL = require("os").type() == "Darwin" ? "\r\n" : "\n";
@@ -13,11 +12,23 @@ const { GetObjectCommand, PutObjectCommand, S3Client } = require("@aws-sdk/clien
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
 
-// Google Drive config ************************************************************
+// Constants & Config
+const DORKY_DIR = ".dorky";
+const METADATA_PATH = path.join(DORKY_DIR, "metadata.json");
+const CREDENTIALS_PATH = path.join(DORKY_DIR, "credentials.json");
+const GD_CREDENTIALS_PATH = path.join(__dirname, "../google-drive-credentials.json");
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
-const CREDENTIALS_PATH = path.join(__dirname, "../google-drive-credentials.json");
-const TOKEN_PATH = path.join(process.cwd(), '.dorky/credentials.json');
-// ********************************************************************************
+
+// Helpers
+const readJson = (p) => existsSync(p) ? JSON.parse(readFileSync(p)) : {};
+const writeJson = (p, d) => writeFileSync(p, JSON.stringify(d, null, 2));
+
+const checkDorkyProject = () => {
+    if (!existsSync(DORKY_DIR) && !existsSync(".dorkyignore")) {
+        console.log(chalk.red("This is not a dorky project. Please run `dorky --init [aws|google-drive]`"));
+        process.exit(1);
+    }
+};
 
 const figlet = `
       __            __          \t
@@ -26,717 +37,279 @@ const figlet = `
   |_____|_____|__| |__|__|___  |\t
                          |_____|\t
 `;
-// Should display the process.env.AWS_ACCESS_KEY, process.env.AWS_SECRET_KEY, process.env.AWS_REGION, process.env.BUCKET_NAME to be set
-const usage = `${figlet}`;
-let randomColor = null;
-do {
-    const randomHex = Math.floor(Math.random() * 16777215).toString(16);
-    randomColor = `#${randomHex}`;
-} while (randomColor[2] === "f" || randomColor[3] === "f");
-console.log(chalk.bgHex(randomColor)(usage));
+let randomColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
+while (randomColor[2] === "f" || randomColor[3] === "f") randomColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
+console.log(chalk.bgHex(randomColor)(figlet));
 
-if (process.argv.slice(2).length === 0) {
-    process.argv.push("--help");
-}
-var args = yargs
-    .option("init", { alias: "i", describe: "Initialize dorky project", type: "string", demandOption: false })
-    .option("list", { alias: "l", describe: "List files in dorky", type: "string", demandOption: false })
-    .option("add", { alias: "a", describe: "Add files to push or pull", type: "array", demandOption: false })
-    .option("rm", { alias: "r", describe: "Remove files from push or pull", type: "array", demandOption: false })
-    .option("push", { alias: "ph", describe: "Push files to storage", type: "string", demandOption: false })
-    .option("pull", { alias: "pl", describe: "Pull files from storage", type: "string", demandOption: false })
-    .option("migrate", { alias: "m", describe: "Migrate dorky project to another storage", type: "string", demandOption: false })
-    .example('$0 --init aws', 'Initialize a dorky project with AWS storage')
-    .example('$0 --init google-drive', 'Initialize a dorky project with Google Drive storage')
-    .example('$0 --list', 'List local files that can be added and already added files')
-    .example('$0 --list remote', 'List files in remote storage')
-    .example('$0 --add file1.txt file2.js', 'Add specific files to stage-1')
-    .example('$0 --rm file1.txt', 'Remove a file from stage-1')
-    .example('$0 --push', 'Push staged files to storage')
-    .example('$0 --pull', 'Pull files from storage')
-    .example('$0 --migrate aws', 'Migrate the project to AWS storage')
-    .help('help')
-    .strict()
-    .argv
+const args = yargs
+    .option("init", { alias: "i", describe: "Initialize dorky", type: "string" })
+    .option("list", { alias: "l", describe: "List files", type: "string" })
+    .option("add", { alias: "a", describe: "Add files", type: "array" })
+    .option("rm", { alias: "r", describe: "Remove files", type: "array" })
+    .option("push", { alias: "ph", describe: "Push files", type: "string" })
+    .option("pull", { alias: "pl", describe: "Pull files", type: "string" })
+    .option("migrate", { alias: "m", describe: "Migrate project", type: "string" })
+    .help('help').strict().argv;
 
-if (Object.keys(args).length == 2) {
-    yargs.showHelp()
-}
-
-function checkIfDorkyProject() {
-    if (!existsSync(".dorky") && !existsSync(".dorkyignore")) {
-        console.log(chalk.red("This is not a dorky project. Please run `dorky --init [aws|google-drive]` to initialize a dorky project."));
-        process.exit(1);
-    }
-}
-
-function setupFilesAndFolders(metaData, credentials) {
-    console.log("Initializing dorky project");
-    if (existsSync(".dorky")) {
-        console.log("Dorky is already initialised in this project.");
-    } else {
-        mkdirSync(".dorky");
-        console.log(chalk.bgGreen("Created .dorky folder."));
-        writeFileSync(".dorky/metadata.json", JSON.stringify(metaData, null, 2));
-        console.log(chalk.bgGreen("Created .dorky/metadata.json file."));
-        writeFileSync(".dorkyignore", "");
-        console.log(chalk.bgGreen("Created .dorkyignore file."));
-        writeFileSync(".dorky/credentials.json", JSON.stringify(credentials, null, 2));
-        console.log(chalk.bgGreen("Created .dorky/credentials.json file."));
-    }
-}
+if (Object.keys(args).length === 2 && args._.length === 0) yargs.showHelp();
 
 function updateGitIgnore() {
-    let gitignoreContent = "";
-    if (existsSync(".gitignore")) {
-        gitignoreContent = fs.readFileSync(".gitignore").toString();
-    }
-    const dorkyIgnoreEntry = ".dorky/credentials.json";
-    if (!gitignoreContent.includes(dorkyIgnoreEntry)) {
-        gitignoreContent += EOL + dorkyIgnoreEntry + EOL;
-        fs.writeFileSync(".gitignore", gitignoreContent);
-        console.log(`${chalk.bgGreen("Updated .gitignore to ignore .dorky/credentials.json.")} ${chalk.red("⚠️  This is done to protect your credentials.")}`);
+    let content = existsSync(".gitignore") ? readFileSync(".gitignore").toString() : "";
+    if (!content.includes(CREDENTIALS_PATH)) {
+        writeFileSync(".gitignore", content + EOL + CREDENTIALS_PATH + EOL);
+        console.log(chalk.bgGreen("Updated .gitignore to ignore credentials."));
     }
 }
 
 async function authorizeGoogleDriveClient(forceReauth = false) {
-    async function loadSavedCredentialsIfExist() {
-        try {
-            const content = await fs.readFileSync(TOKEN_PATH);
-            const savedCredentials = JSON.parse(content);
-
-            if (!savedCredentials.access_token && !savedCredentials.refresh_token) {
-                return null;
-            }
-
-            const keys = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
+    if (!forceReauth && existsSync(CREDENTIALS_PATH)) {
+        const saved = readJson(CREDENTIALS_PATH);
+        if (saved.storage === 'google-drive' && saved.expiry_date) {
+            const keys = readJson(GD_CREDENTIALS_PATH);
             const key = keys.installed || keys.web;
-            const oAuth2Client = new google.auth.OAuth2(
-                key.client_id,
-                key.client_secret,
-                key.redirect_uris[0]
-            );
+            const client = new google.auth.OAuth2(key.client_id, key.client_secret, key.redirect_uris[0]);
+            client.setCredentials(saved);
 
-            const { storage, ...authCredentials } = savedCredentials;
-            oAuth2Client.setCredentials(authCredentials);
-
-            return oAuth2Client;
-        } catch (err) {
-            return null;
-        }
-    }
-
-    async function isTokenExpired(credentials) {
-        if (!credentials.expiry_date) {
-            return true;
-        }
-        const expiryBuffer = 300000;
-        const currentTimeUTC = Date.now();
-        const expiryTimeUTC = credentials.expiry_date;
-
-        return currentTimeUTC >= (expiryTimeUTC - expiryBuffer);
-    }
-
-    async function refreshAndSaveToken(client) {
-        try {
-            await client.getAccessToken();
-            const newCredentials = client.credentials;
-            const credentialsToSave = {
-                storage: "google-drive",
-                ...newCredentials
-            };
-            fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
-            return client;
-        } catch (err) {
-            // Check if the error is due to invalid grant (refresh token is invalid)
-            if (err.message && (err.message.includes('invalid_grant') || err.message.includes('Token has been expired or revoked'))) {
-                console.log(chalk.yellow('Refresh token is invalid or revoked. Re-authentication required.'));
-            }
-            return null;
-        }
-    }
-
-    if (!forceReauth) {
-        let client = await loadSavedCredentialsIfExist();
-        if (client) {
-            const credentials = JSON.parse(fs.readFileSync(TOKEN_PATH));
-
-            const clientCredentials = client.credentials || credentials;
-
-            if (await isTokenExpired(clientCredentials)) {
-                console.log(chalk.yellow('Access token expired. Refreshing...'));
-                client = await refreshAndSaveToken(client);
-                if (client) {
-                    console.log(chalk.green('Token refreshed successfully.'));
-                    return client;
-                } else {
-                    console.log(chalk.yellow('Token refresh failed. Starting new authentication flow...'));
-                    // Fall through to reauthenticate
+            if (Date.now() >= saved.expiry_date - 300000) {
+                try {
+                    const { credentials } = await client.refreshAccessToken();
+                    writeJson(CREDENTIALS_PATH, { storage: "google-drive", ...credentials });
+                    client.setCredentials(credentials);
+                } catch (e) {
+                    console.log(chalk.yellow("Token refresh failed. Re-authenticating..."));
+                    return authorizeGoogleDriveClient(true);
                 }
-            } else {
-                return client;
             }
+            return client;
         }
     }
 
-    client = await authenticate({
-        scopes: SCOPES,
-        keyfilePath: CREDENTIALS_PATH,
-    });
-
-    if (client && client.credentials && existsSync(path.dirname(TOKEN_PATH))) {
-        const credentialsToSave = {
-            storage: "google-drive",
-            ...client.credentials
-        };
-        fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
+    const client = await authenticate({ scopes: SCOPES, keyfilePath: GD_CREDENTIALS_PATH });
+    if (client?.credentials && existsSync(path.dirname(CREDENTIALS_PATH))) {
+        writeJson(CREDENTIALS_PATH, { storage: "google-drive", ...client.credentials });
     }
-
     return client;
 }
 
 async function init(storage) {
-    const metaData = { "stage-1-files": {}, "uploaded-files": {} };
-    var credentials;
-    switch (storage) {
-        case "aws":
-            if (!process.env.AWS_ACCESS_KEY || !process.env.AWS_SECRET_KEY || !process.env.AWS_REGION || !process.env.BUCKET_NAME) {
-                console.log(chalk.red("Please set the following environment variables before initializing AWS storage:"));
-                !process.env.AWS_ACCESS_KEY && console.log(chalk.bgRed(`  export AWS_ACCESS_KEY="your-access-key"`));
-                !process.env.AWS_SECRET_KEY && console.log(chalk.bgRed(`  export AWS_SECRET_KEY="your-secret-key"`));
-                !process.env.AWS_REGION && console.log(chalk.bgRed(`  export AWS_REGION="us-east-1"`));
-                !process.env.BUCKET_NAME && console.log(chalk.bgRed(`  export BUCKET_NAME="your-bucket-name"`));
-                return;
-            }
-            credentials = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME }
-            setupFilesAndFolders(metaData, credentials);
-            break;
-        case "google-drive":
-            const client = await authorizeGoogleDriveClient(true);
-            credentials = { storage: "google-drive", ...client.credentials };
-            setupFilesAndFolders(metaData, credentials);
-            break;
-        default:
-            console.log("Please provide a valid storage option <aws|google-drive>");
-            break;
+    if (existsSync(DORKY_DIR)) return console.log("Dorky is already initialised.");
+    if (!["aws", "google-drive"].includes(storage)) return console.log("Invalid storage option.");
+
+    let credentials = {};
+    if (storage === "aws") {
+        if (!process.env.AWS_ACCESS_KEY || !process.env.AWS_SECRET_KEY || !process.env.AWS_REGION || !process.env.BUCKET_NAME) {
+            console.log(chalk.red("Missing AWS env vars."));
+            return;
+        }
+        credentials = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME };
+    } else {
+        const client = await authorizeGoogleDriveClient(true);
+        credentials = { storage: "google-drive", ...client.credentials };
     }
+
+    mkdirSync(DORKY_DIR);
+    writeJson(METADATA_PATH, { "stage-1-files": {}, "uploaded-files": {} });
+    writeFileSync(".dorkyignore", "");
+    writeJson(CREDENTIALS_PATH, credentials);
+    console.log(chalk.bgGreen("Initialized dorky project."));
     updateGitIgnore();
 }
 
 async function list(type) {
-    checkIfDorkyProject();
-    const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    switch (type) {
-        case "remote":
-            const uploadedFiles = Object.keys(metaData["uploaded-files"]);
-            if (uploadedFiles.length === 0) {
-                console.log(chalk.red("No files found in remote storage."));
-                return;
-            }
-            console.log(chalk.green("Listing files in stage-1:"));
-            uploadedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
-            break;
-        default:
-            console.log(chalk.red("Listing files that can be added:"));
-            var exclusions = fs.readFileSync(".dorkyignore").toString().split(EOL);
-            exclusions = exclusions.filter((exclusion) => exclusion !== "");
-            const src = process.cwd();
-            const files = await glob(path.join(src, "**/*"), { dot: true });
-            const filteredFiles = files.filter((file) => {
-                for (let i = 0; i < exclusions.length; i++) {
-                    if (file.includes(exclusions[i])) return false;
-                }
-                if (file.includes(".dorky/")) return false;
-                if (file.endsWith(".dorky") && fs.lstatSync(file).isDirectory()) return false;
-                if (file.endsWith(".dorkyignore")) return false;
-                return true;
-            });
-            filteredFiles.forEach((file) => {
-                const relativePath = path.relative(process.cwd(), file);
-                if (relativePath.includes('.env') || relativePath.includes('.config')) {
-                    console.log(chalk.bold.bgYellowBright.red(`- ${relativePath} (This file might be sensitive, please add it to dorky if needed)`));
-                } else {
-                    console.log(chalk.red(`- ${relativePath}`));
-                }
-            });
-            console.log(chalk.green("\nList of files that are already added:"));
-            const addedFiles = Object.keys(metaData["stage-1-files"]);
-            addedFiles.forEach((file) => console.log(chalk.green(`- ${file}`)));
-            break;
+    checkDorkyProject();
+    const meta = readJson(METADATA_PATH);
+    if (type === "remote") {
+        const files = Object.keys(meta["uploaded-files"]);
+        if (!files.length) return console.log(chalk.red("No remote files."));
+        console.log(chalk.green("Remote files:"));
+        files.forEach(f => console.log(chalk.green(`- ${f}`)));
+    } else {
+        console.log(chalk.red("Files to add:"));
+        const exclusions = existsSync(".dorkyignore") ? readFileSync(".dorkyignore").toString().split(EOL).filter(Boolean) : [];
+        const files = await glob("**/*", { dot: true, ignore: [...exclusions.map(e => `**/${e}/**`), ...exclusions, ".dorky/**", ".dorkyignore", ".git/**", "node_modules/**"] });
+
+        files.forEach(f => {
+            const rel = path.relative(process.cwd(), f);
+            if (rel.includes('.env') || rel.includes('.config')) console.log(chalk.bold.bgYellowBright.red(`- ${rel} (Might be sensitive)`));
+            else console.log(chalk.red(`- ${rel}`));
+        });
+        console.log(chalk.green("\nStaged files:"));
+        Object.keys(meta["stage-1-files"]).forEach(f => console.log(chalk.green(`- ${f}`)));
     }
 }
 
-function add(listOfFiles) {
-    checkIfDorkyProject();
-    console.log("Adding files to stage-1 to push to storage");
-    const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    const addedFiles = [];
-    listOfFiles.forEach((file) => {
-        if (!fs.existsSync(file)) {
-            console.log(chalk.red(`File ${file} does not exist.`));
-            return;
-        }
-        const fileContents = fs.readFileSync(file);
-        const fileType = mimeTypes.lookup(file);
-        const newHash = md5(fileContents);
-        const existingEntry = metaData["stage-1-files"][file];
-        if (existingEntry && existingEntry.hash === newHash) {
-            console.log(chalk.yellow(`File ${file} has no changes, skipping.`));
-            return;
-        }
-        metaData["stage-1-files"][file] = {
-            "mime-type": fileType ? fileType : "application/octet-stream",
-            "hash": newHash
-        };
-        addedFiles.push(file);
+function add(files) {
+    checkDorkyProject();
+    const meta = readJson(METADATA_PATH);
+    const added = [];
+    files.forEach(f => {
+        if (!existsSync(f)) return console.log(chalk.red(`File ${f} missing.`));
+        const hash = md5(readFileSync(f));
+        if (meta["stage-1-files"][f]?.hash === hash) return console.log(chalk.yellow(`${f} unchanged.`));
+        meta["stage-1-files"][f] = { "mime-type": mimeTypes.lookup(f) || "application/octet-stream", hash };
+        added.push(f);
     });
-    fs.writeFileSync(".dorky/metadata.json", JSON.stringify(metaData, null, 2));
-    addedFiles.forEach((file) => console.log(chalk.green(`Added ${file} to stage-1.`)));
+    writeJson(METADATA_PATH, meta);
+    added.forEach(f => console.log(chalk.green(`Added ${f}`)));
 }
 
-function rm(listOfFiles) {
-    checkIfDorkyProject();
-    console.log(chalk.red("Removing files from stage-1"));
-    const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    listOfFiles = listOfFiles.filter((file) => {
-        if (metaData["stage-1-files"][file] == undefined) return false;
-        delete metaData["stage-1-files"][file];
+function rm(files) {
+    checkDorkyProject();
+    const meta = readJson(METADATA_PATH);
+    const removed = files.filter(f => {
+        if (!meta["stage-1-files"][f]) return false;
+        delete meta["stage-1-files"][f];
         return true;
     });
-    fs.writeFileSync(".dorky/metadata.json", JSON.stringify(metaData, null, 2));
-    if (listOfFiles.length) listOfFiles.map((file) => console.log(chalk.red(`Removed ${file} from stage-1.`)));
-    else console.log(chalk.red("No files found that can be removed."));
+    writeJson(METADATA_PATH, meta);
+    removed.length ? removed.forEach(f => console.log(chalk.red(`Removed ${f}`))) : console.log(chalk.red("None removed."));
 }
 
 async function checkCredentials() {
+    if (existsSync(CREDENTIALS_PATH)) return true;
+    if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY) {
+        writeJson(CREDENTIALS_PATH, {
+            storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY,
+            awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME
+        });
+        return true;
+    }
     try {
-        if (fs.existsSync(".dorky/credentials.json")) {
-            const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
-            if (credentials.storage === "google-drive") {
-                if (credentials.access_token && credentials.scope && credentials.token_type && credentials.expiry_date) return true;
-                else return false;
-            } else {
-                if (credentials.accessKey && credentials.secretKey && credentials.awsRegion && credentials.bucket) return true;
-                else return false;
-            }
-        } else {
-            console.log("Setting the credentials again.")
-            if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME) {
-                fs.writeFileSync(".dorky/credentials.json", JSON.stringify({
-                    "storage": "aws",
-                    "accessKey": process.env.AWS_ACCESS_KEY,
-                    "secretKey": process.env.AWS_SECRET_KEY,
-                    "awsRegion": process.env.AWS_REGION,
-                    "bucket": process.env.BUCKET_NAME
-                }, null, 2));
-                return true;
-            } else {
+        const client = await authorizeGoogleDriveClient(true);
+        if (client) return true;
+    } catch { }
+    console.log(chalk.red("Credentials missing."));
+    return false;
+}
+
+const getS3 = (c) => new S3Client({
+    credentials: { accessKeyId: c.accessKey || process.env.AWS_ACCESS_KEY, secretAccessKey: c.secretKey || process.env.AWS_SECRET_KEY },
+    region: c.awsRegion || process.env.AWS_REGION
+});
+
+async function runS3(creds, fn) {
+    try { await fn(getS3(creds), creds.bucket || process.env.BUCKET_NAME); }
+    catch (err) {
+        if (["InvalidAccessKeyId", "SignatureDoesNotMatch"].includes(err.name) || err.$metadata?.httpStatusCode === 403) {
+            if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY) {
+                console.log(chalk.yellow("AWS auth failed. Retrying with env vars..."));
+                const newCreds = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME };
+                writeJson(CREDENTIALS_PATH, newCreds);
                 try {
-                    let credentials;
-                    const client = await authorizeGoogleDriveClient(true);
-                    credentials = { storage: "google-drive", ...client.credentials };
-                    fs.writeFileSync(".dorky/credentials.json", JSON.stringify(credentials, null, 2));
-                    console.log(chalk.green("Credentials saved in .dorky/credentials.json"));
-                    console.log(chalk.green("Authentication successful. Continuing with the operation..."));
-                    return true;
-                } catch (err) {
-                    console.log(chalk.red("Failed to authorize Google Drive client: " + err.message));
-                    console.log(chalk.red("Please provide credentials in .dorky/credentials.json"));
-                    return false;
-                }
-            }
-        }
-    } catch (err) {
-        console.log(chalk.red("Please provide credentials in .dorky/credentials.json"));
-        return false;
-    }
-}
-
-async function push() {
-    checkIfDorkyProject();
-    if (!(await checkCredentials())) {
-        console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
-        return;
-    }
-    console.log("Pushing files to storage");
-    const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    const stage1Files = metaData["stage-1-files"];
-    const pushedFiles = metaData["uploaded-files"];
-    var filesToPush = [];
-    Object.keys(stage1Files).map((file) => {
-        if (pushedFiles[file]) {
-            if (stage1Files[file]["hash"] != pushedFiles[file]["hash"]) filesToPush.push(file);
-        } else filesToPush.push(file);
-    });
-    filesToPush = filesToPush.map((file) => {
-        return {
-            "name": file,
-            "mime-type": stage1Files[file]["mime-type"],
-            "hash": stage1Files[file]["hash"]
-        }
-    });
-    const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
-    switch (credentials.storage) {
-        case "aws":
-            pushToS3(filesToPush, credentials);
-            break;
-        case "google-drive":
-            pushToGoogleDrive(filesToPush);
-            break;
-        default:
-            console.log("Please provide a valid storage option <aws|google-drive>");
-            break;
-    }
-    // This should only update the uploaded-files after successful push => @trishantpahwa | 2026-01-25 17:57:35
-    metaData["uploaded-files"] = metaData["stage-1-files"];
-    fs.writeFileSync(".dorky/metadata.json", JSON.stringify(metaData, null, 2));
-    console.log(chalk.green("Pushed the following files to storage:"));
-}
-
-function pushToS3(files, credentials, failed = false) {
-    const s3 = new S3Client({
-        credentials: {
-            accessKeyId: credentials.accessKey ?? process.env.AWS_ACCESS_KEY,
-            secretAccessKey: credentials.secretKey ?? process.env.AWS_SECRET_KEY
-        },
-        region: credentials.awsRegion ?? process.env.AWS_REGION
-    });
-    const bucketName = credentials.bucket ?? process.env.BUCKET_NAME;
-    Promise.all(files.map(async (file) => {
-        const rootFolder = path.basename(process.cwd());
-        const pathToFile = path.join(rootFolder, file.name);
-        try {
-            await s3.send(
-                new PutObjectCommand({
-                    Bucket: bucketName,
-                    Key: pathToFile,
-                    Body: fs.readFileSync(file.name).toString(),
-                })
-            );
-            console.log(chalk.green(`Pushed ${pathToFile} to storage.`));
-        } catch (err) {
-            if (err.name === 'InvalidAccessKeyId' || err.name === 'SignatureDoesNotMatch' ||
-                err.name === 'InvalidClientTokenId' || err.Code === 'InvalidAccessKeyId' ||
-                (err.$metadata && err.$metadata.httpStatusCode === 403)) {
-                console.log(chalk.yellow(`AWS authentication failed. Attempting to use environment variables...`));
-                if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME && !failed) {
-                    const newCredentials = {
-                        storage: "aws",
-                        accessKey: process.env.AWS_ACCESS_KEY,
-                        secretKey: process.env.AWS_SECRET_KEY,
-                        awsRegion: process.env.AWS_REGION,
-                        bucket: process.env.BUCKET_NAME
-                    };
-                    fs.writeFileSync(".dorky/credentials.json", JSON.stringify(newCredentials, null, 2));
-
-                    try {
-                        await pushToS3([file], newCredentials, true);
-                    } catch (err) {
-                        console.log(chalk.red(`Failed after retrying with environment variables`));
-                        console.log(chalk.yellow(`Please set correct environment variables:`));
-                        console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
-                        console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
-                        console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
-                        console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
-                        throw err;
-                    }
-                } else {
-                    console.log(chalk.red(`AWS credentials are invalid and environment variables are not set.`));
-                    console.log(chalk.yellow(`Please set the following environment variables:`));
-                    console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
-                    console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
-                    console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
-                    console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
-                }
-            } else {
-                console.log(chalk.red(`Error uploading ${file.name}: ${err.message}`));
-                throw err;
-            }
-        }
-    }));
-}
-
-
-async function pushToGoogleDrive(files) {
-    async function getOrCreateFolderId(folderPath, drive) {
-        const folders = folderPath.split(path.sep);
-        let parentId = 'root';
-        for (const folder of folders) {
-            const res = await drive.files.list({
-                q: `name='${folder}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents`,
-                fields: 'files(id, name)',
-                spaces: 'drive'
-            });
-            if (res.data.files.length > 0) {
-                parentId = res.data.files[0].id;
-            } else {
-                const folderMetadata = {
-                    name: folder,
-                    mimeType: 'application/vnd.google-apps.folder',
-                    parents: [parentId],
-                };
-                const folderRes = await drive.files.create({
-                    requestBody: folderMetadata,
-                    fields: 'id',
-                });
-                parentId = folderRes.data.id;
-            }
-        }
-        return parentId;
-    }
-
-    console.log("Uploading to google drive");
-    let client = await authorizeGoogleDriveClient(false);
-
-    let credentialsToSave = {
-        storage: "google-drive",
-        ...client.credentials
-    };
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
-
-    let drive = google.drive({ version: 'v3', auth: client });
-
-    for (const file of files) {
-        const rootFolder = path.basename(process.cwd());
-        const pathToFile = path.join(rootFolder, file.name);
-
-        try {
-            const requestBody = {
-                name: path.basename(file.name),
-                parents: [await getOrCreateFolderId(pathToFile.split("/").slice(0, -1).join("/"), drive)],
-                fields: 'id',
-            };
-            const media = {
-                mimeType: file["mime-type"],
-                body: fs.createReadStream(path.join(process.cwd(), file.name)),
-            };
-
-            await drive.files.create({
-                requestBody,
-                media: media,
-            });
-            console.log(chalk.green(`Pushed ${file.name} to storage.`));
-        } catch (err) {
-            // Check if error is due to invalid authentication
-            if (err.code === 401 || (err.message && (err.message.includes('invalid_grant') || err.message.includes('Invalid Credentials')))) {
-                console.log(chalk.yellow(`Authentication failed. Attempting to reauthenticate...`));
-
-                // Delete invalid credentials and force reauthentication
-                if (fs.existsSync(TOKEN_PATH)) {
-                    fs.unlinkSync(TOKEN_PATH);
-                }
-
-                client = await authorizeGoogleDriveClient(true);
-                credentialsToSave = {
-                    storage: "google-drive",
-                    ...client.credentials
-                };
-                fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
-                drive = google.drive({ version: 'v3', auth: client });
-
-                console.log(chalk.green(`Reauthentication successful. Retrying upload...`));
-
-                // Retry the entire operation with new credentials
-                const requestBody = {
-                    name: path.basename(file.name),
-                    parents: [await getOrCreateFolderId(pathToFile.split("/").slice(0, -1).join("/"), drive)],
-                    fields: 'id',
-                };
-                const media = {
-                    mimeType: file["mime-type"],
-                    body: fs.createReadStream(path.join(process.cwd(), file.name)),
-                };
-
-                await drive.files.create({
-                    requestBody,
-                    media: media,
-                });
-                console.log(chalk.green(`Pushed ${file.name} to storage.`));
-            } else {
-                console.log(chalk.red(`Error uploading ${file.name}: ${err.message}`));
-                throw err;
-            }
-        }
-    }
-}
-
-async function pull() {
-    checkIfDorkyProject();
-    if (!(await checkCredentials())) {
-        console.log(chalk.red("Please setup credentials in environment variables or in .dorky/credentials.json"));
-        return;
-    }
-    console.log("Pulling files from storage");
-    const metaData = JSON.parse(fs.readFileSync(".dorky/metadata.json"));
-    const filesToPull = metaData["uploaded-files"];
-    const credentials = JSON.parse(fs.readFileSync(".dorky/credentials.json"));
-    switch (credentials.storage) {
-        case "aws":
-            pullFromS3(filesToPull, credentials);
-            break;
-        case "google-drive":
-            pullFromGoogleDrive(filesToPull);
-            break;
-        default:
-            console.log("Please provide a valid storage option <aws|google-drive>");
-            break;
-    }
-}
-
-function pullFromS3(files, credentials, failed = false) {
-    const s3 = new S3Client({
-        credentials: {
-            accessKeyId: credentials.accessKey ?? process.env.AWS_ACCESS_KEY,
-            secretAccessKey: credentials.secretKey ?? process.env.AWS_SECRET_KEY
-        },
-        region: credentials.awsRegion ?? process.env.AWS_REGION
-    });
-    const bucketName = credentials.bucket ?? process.env.BUCKET_NAME;
-    Promise.all(Object.keys(files).map(async (file) => {
-        const rootFolder = path.basename(process.cwd());
-        const pathToFile = path.join(rootFolder, file);
-
-        try {
-            const { Body } = await s3.send(
-                new GetObjectCommand({
-                    Bucket: bucketName,
-                    Key: pathToFile,
-                })
-            );
-            const dir = path.dirname(file);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-            fs.writeFileSync(file, await Body.transformToString());
-            console.log(chalk.green(`Pulled ${file} from storage.`));
-        } catch (err) {
-            if (err.name === 'InvalidAccessKeyId' || err.name === 'SignatureDoesNotMatch' ||
-                err.name === 'InvalidClientTokenId' || err.Code === 'InvalidAccessKeyId' ||
-                (err.$metadata && err.$metadata.httpStatusCode === 403)) {
-                console.log(chalk.yellow(`AWS authentication failed for ${file}. Attempting to use environment variables...`));
-                if (process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY && process.env.AWS_REGION && process.env.BUCKET_NAME && !failed) {
-                    const newCredentials = {
-                        storage: "aws",
-                        accessKey: process.env.AWS_ACCESS_KEY,
-                        secretKey: process.env.AWS_SECRET_KEY,
-                        awsRegion: process.env.AWS_REGION,
-                        bucket: process.env.BUCKET_NAME
-                    };
-                    fs.writeFileSync(".dorky/credentials.json", JSON.stringify(newCredentials, null, 2));
-
-                    try {
-                        await pullFromS3({ [file]: files[file] }, newCredentials, true);
-                    } catch (err) {
-                        console.log(chalk.red(`Failed after retrying with environment variables`));
-                        console.log(chalk.yellow(`Please set correct environment variables:`));
-                        console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
-                        console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
-                        console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
-                        console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
-                        throw err;
-                    }
-                } else {
-                    console.log(chalk.red(`AWS credentials are invalid and environment variables are not set.`));
-                    console.log(chalk.yellow(`Please set the following environment variables:`));
-                    console.log(chalk.cyan(`  export AWS_ACCESS_KEY="your-access-key"`));
-                    console.log(chalk.cyan(`  export AWS_SECRET_KEY="your-secret-key"`));
-                    console.log(chalk.cyan(`  export AWS_REGION="us-east-1"`));
-                    console.log(chalk.cyan(`  export BUCKET_NAME="your-bucket-name"`));
-                }
-            } else {
-                console.log(chalk.red(`Error downloading ${file.name}: ${err.message}`));
-                throw err;
-            }
-        }
-    }));
-}
-
-async function pullFromGoogleDrive(files) {
-    console.log("Downloading from google drive");
-    files = Object.keys(files).map((file) => {
-        return { name: file, ...files[file] };
-    });
-
-    let client = await authorizeGoogleDriveClient(false);
-
-    let credentialsToSave = {
-        storage: "google-drive",
-        ...client.credentials
-    };
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
-
-    let drive = google.drive({ version: "v3", auth: client });
-
-    try {
-        await Promise.all(files.map(async (file) => {
-            try {
-                const res = await drive.files.list({
-                    q: `name='${path.basename(file.name)}' and mimeType!='application/vnd.google-apps.folder'`,
-                    fields: 'files(id, name)',
-                    spaces: 'drive'
-                });
-                if (res.data.files.length === 0) {
-                    console.log(chalk.red(`File ${file.name} not found in Google Drive.`));
+                    await fn(getS3(newCreds), newCreds.bucket);
                     return;
-                }
-                const _file = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
-                const dir = path.dirname(file.name);
-                if (!fs.existsSync(dir)) {
-                    fs.mkdirSync(dir, { recursive: true });
-                }
-                fs.writeFileSync(file.name, await _file.data.text(), "utf-8");
-                console.log(chalk.green(`Pulled ${file.name} from storage.`));
-            } catch (err) {
-                // Check if error is due to invalid authentication
-                if (err.code === 401 || (err.message && (err.message.includes('invalid_grant') || err.message.includes('Invalid Credentials')))) {
-                    console.log(chalk.yellow(`Authentication failed for ${file.name}. Attempting to reauthenticate...`));
-
-                    // Delete invalid credentials and force reauthentication
-                    if (fs.existsSync(TOKEN_PATH)) {
-                        fs.unlinkSync(TOKEN_PATH);
-                    }
-
-                    client = await authorizeGoogleDriveClient(true);
-                    credentialsToSave = {
-                        storage: "google-drive",
-                        ...client.credentials
-                    };
-                    fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
-                    drive = google.drive({ version: "v3", auth: client });
-
-                    console.log(chalk.green(`Reauthentication successful. Retrying download...`));
-
-                    // Retry the download with new credentials
-                    const res = await drive.files.list({
-                        q: `name='${path.basename(file.name)}' and mimeType!='application/vnd.google-apps.folder'`,
-                        fields: 'files(id, name)',
-                        spaces: 'drive'
-                    });
-                    if (res.data.files.length === 0) {
-                        console.log(chalk.red(`File ${file.name} not found in Google Drive.`));
-                        return;
-                    }
-                    const _file = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
-                    const dir = path.dirname(file.name);
-                    if (!fs.existsSync(dir)) {
-                        fs.mkdirSync(dir, { recursive: true });
-                    }
-                    fs.writeFileSync(file.name, await _file.data.text(), "utf-8");
-                    console.log(chalk.green(`Pulled ${file.name} from storage.`));
-                } else {
-                    console.log(chalk.red(`Error downloading ${file.name}: ${err.message}`));
-                    throw err;
+                } catch (e) {
+                    console.log(chalk.red("Retried with env vars but failed."));
                 }
             }
-        }));
-    } catch (err) {
+            console.log(chalk.red("AWS authentication failed."));
+            console.log(chalk.yellow("Please set correct AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION and BUCKET_NAME in environment or .dorky/credentials.json"));
+            process.exit(1);
+        }
         throw err;
     }
 }
 
-if (Object.keys(args).includes("init")) init(args.init);
-if (Object.keys(args).includes("list")) list(args.list);
-if (Object.keys(args).includes("add")) add(args.add);
-if (Object.keys(args).includes("rm")) rm(args.rm);
-if (Object.keys(args).includes("push")) push();
-if (Object.keys(args).includes("pull")) pull(); 
+async function getFolderId(pathStr, drive) {
+    let parentId = 'root';
+    if (!pathStr || pathStr === '.') return parentId;
+    for (const folder of pathStr.split("/")) {
+        if (!folder) continue;
+        const res = await drive.files.list({ q: `name='${folder}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents`, fields: 'files(id)' });
+        if (res.data.files[0]) parentId = res.data.files[0].id;
+        else parentId = (await drive.files.create({ requestBody: { name: folder, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }, fields: 'id' })).data.id;
+    }
+    return parentId;
+}
+
+async function runDrive(fn) {
+    let client = await authorizeGoogleDriveClient();
+    let drive = google.drive({ version: 'v3', auth: client });
+    try { await fn(drive); }
+    catch (err) {
+        if (err.code === 401 || err.message?.includes('invalid_grant')) {
+            console.log(chalk.yellow("Drive auth failed. Re-authenticating..."));
+            if (existsSync(CREDENTIALS_PATH)) unlinkSync(CREDENTIALS_PATH);
+            client = await authorizeGoogleDriveClient(true);
+            drive = google.drive({ version: 'v3', auth: client });
+            await fn(drive);
+        } else throw err;
+    }
+}
+
+async function push() {
+    checkDorkyProject();
+    if (!await checkCredentials()) return;
+    const meta = readJson(METADATA_PATH);
+    const files = Object.keys(meta["stage-1-files"])
+        .filter(f => !meta["uploaded-files"][f] || meta["stage-1-files"][f].hash !== meta["uploaded-files"][f].hash)
+        .map(f => ({ name: f, ...meta["stage-1-files"][f] }));
+
+    if (files.length === 0) return console.log("Nothing to push.");
+
+    const creds = readJson(CREDENTIALS_PATH);
+    if (creds.storage === "aws") {
+        await runS3(creds, async (s3, bucket) => {
+            await Promise.all(files.map(async f => {
+                const key = path.join(path.basename(process.cwd()), f.name);
+                await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f.name) }));
+                console.log(chalk.green(`Pushed ${f.name}`));
+            }));
+        });
+    } else if (creds.storage === "google-drive") {
+        await runDrive(async (drive) => {
+            for (const f of files) {
+                const root = path.basename(process.cwd());
+                const parentId = await getFolderId(path.dirname(path.join(root, f.name)), drive);
+                await drive.files.create({
+                    requestBody: { name: path.basename(f.name), parents: [parentId] },
+                    media: { mimeType: f["mime-type"], body: createReadStream(f.name) }
+                });
+                console.log(chalk.green(`Pushed ${f.name}`));
+            }
+        });
+    }
+
+    meta["uploaded-files"] = { ...meta["uploaded-files"], ...meta["stage-1-files"] };
+    writeJson(METADATA_PATH, meta);
+}
+
+async function pull() {
+    checkDorkyProject();
+    if (!await checkCredentials()) return;
+    const meta = readJson(METADATA_PATH);
+    const files = meta["uploaded-files"];
+    const creds = readJson(CREDENTIALS_PATH);
+
+    if (creds.storage === "aws") {
+        await runS3(creds, async (s3, bucket) => {
+            await Promise.all(Object.keys(files).map(async f => {
+                const key = path.join(path.basename(process.cwd()), f);
+                const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+                const dir = path.dirname(f);
+                if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+                writeFileSync(f, await Body.transformToString());
+                console.log(chalk.green(`Pulled ${f}`));
+            }));
+        });
+    } else if (creds.storage === "google-drive") {
+        await runDrive(async (drive) => {
+            const fileList = Object.keys(files).map(k => ({ name: k, ...files[k] }));
+            await Promise.all(fileList.map(async f => {
+                const res = await drive.files.list({ q: `name='${path.basename(f.name)}' and mimeType!='application/vnd.google-apps.folder'`, fields: 'files(id)' });
+                if (!res.data.files[0]) return console.log(chalk.red(`Missing ${f.name}`));
+                const data = await drive.files.get({ fileId: res.data.files[0].id, alt: 'media' });
+                if (!existsSync(path.dirname(f.name))) mkdirSync(path.dirname(f.name), { recursive: true });
+                writeFileSync(f.name, await data.data.text());
+                console.log(chalk.green(`Pulled ${f.name}`));
+            }));
+        });
+    }
+}
+
+if (args.init !== undefined) init(args.init);
+if (args.list !== undefined) list(args.list);
+if (args.add !== undefined) add(args.add);
+if (args.rm !== undefined) rm(args.rm);
+if (args.push !== undefined) push();
+if (args.pull !== undefined) pull();
