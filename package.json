@@ -31,6 +31,7 @@
   "homepage": "https://github.com/trishantpahwa/dorky#readme",
   "devDependencies": {
     "c8": "^10.1.3",
+    "dotenv": "^17.2.3",
     "execa": "^5.1.1",
     "tsc": "^2.0.4",
     "typescript": "^5.5.4",
