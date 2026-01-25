@@ -381,9 +381,11 @@ ISC License - see [LICENSE](LICENSE) file for details.
 ## Roadmap
 
 - [x] Update README with AWS IAM policy (bug fix release)
-- [ ] Handle invalid access token for Google Drive (edge cases)
-- [ ] Extension for VS Code to list and highlight them like git (Major release)
+- [*] Handle invalid access token for Google Drive and AWS (edge cases)
+- [ ] rm + push should delete file from storage (minor release)
 - [ ] Uninitialize dorky setup (Bug fix release)
+- [ ] dorky --list remote --update should sync metadata according to remote (Minor release)
+- [ ] Extension for VS Code to list and highlight them like git (Major release)
 - [ ] MCP server (Minor release)
 - [ ] Encryption of files (Minor release)
 - [ ] Add stages for variables (Major release)
