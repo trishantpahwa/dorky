@@ -148,6 +148,10 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
             fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
             return client;
         } catch (err) {
+            // Check if the error is due to invalid grant (refresh token is invalid)
+            if (err.message && (err.message.includes('invalid_grant') || err.message.includes('Token has been expired or revoked'))) {
+                console.log(chalk.yellow('Refresh token is invalid or revoked. Re-authentication required.'));
+            }
             return null;
         }
     }
@@ -160,9 +164,14 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
             const clientCredentials = client.credentials || credentials;
 
             if (await isTokenExpired(clientCredentials)) {
+                console.log(chalk.yellow('Access token expired. Refreshing...'));
                 client = await refreshAndSaveToken(client);
                 if (client) {
+                    console.log(chalk.green('Token refreshed successfully.'));
                     return client;
+                } else {
+                    console.log(chalk.yellow('Token refresh failed. Starting new authentication flow...'));
+                    // Fall through to reauthenticate
                 }
             } else {
                 return client;
@@ -320,8 +329,8 @@ async function checkCredentials() {
                     credentials = { storage: "google-drive", ...client.credentials };
                     fs.writeFileSync(".dorky/credentials.json", JSON.stringify(credentials, null, 2));
                     console.log(chalk.green("Credentials saved in .dorky/credentials.json"));
-                    console.log(chalk.red("Please ignore the warning to set credentials below and run the command again."));
-                    return false;
+                    console.log(chalk.green("Authentication successful. Continuing with the operation..."));
+                    return true;
                 } catch (err) {
                     console.log(chalk.red("Failed to authorize Google Drive client: " + err.message));
                     console.log(chalk.red("Please provide credentials in .dorky/credentials.json"));
@@ -426,37 +435,78 @@ async function pushToGoogleDrive(files) {
         }
         return parentId;
     }
-    console.log("Uploading to google drive");
-    const client = await authorizeGoogleDriveClient(false);
 
-    const credentialsToSave = {
+    console.log("Uploading to google drive");
+    let client = await authorizeGoogleDriveClient(false);
+
+    let credentialsToSave = {
         storage: "google-drive",
         ...client.credentials
     };
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
 
-    const drive = google.drive({ version: 'v3', auth: client });
+    let drive = google.drive({ version: 'v3', auth: client });
+
     for (const file of files) {
         const rootFolder = path.basename(process.cwd());
         const pathToFile = path.join(rootFolder, file.name);
-        const requestBody = {
-            name: path.basename(file.name),
-            parents: [await getOrCreateFolderId(pathToFile.split("/").slice(0, -1).join("/"), drive)],
-            fields: 'id',
-        };
-        const media = {
-            mimeType: file["mime-type"],
-            body: fs.createReadStream(path.join(process.cwd(), file.name)),
-        };
+
         try {
+            const requestBody = {
+                name: path.basename(file.name),
+                parents: [await getOrCreateFolderId(pathToFile.split("/").slice(0, -1).join("/"), drive)],
+                fields: 'id',
+            };
+            const media = {
+                mimeType: file["mime-type"],
+                body: fs.createReadStream(path.join(process.cwd(), file.name)),
+            };
+
             await drive.files.create({
                 requestBody,
                 media: media,
             });
             console.log(chalk.green(`Pushed ${file.name} to storage.`));
         } catch (err) {
-            console.log(err);
-            throw err;
+            // Check if error is due to invalid authentication
+            if (err.code === 401 || (err.message && (err.message.includes('invalid_grant') || err.message.includes('Invalid Credentials')))) {
+                console.log(chalk.yellow(`Authentication failed. Attempting to reauthenticate...`));
+
+                // Delete invalid credentials and force reauthentication
+                if (fs.existsSync(TOKEN_PATH)) {
+                    fs.unlinkSync(TOKEN_PATH);
+                }
+
+                client = await authorizeGoogleDriveClient(true);
+                credentialsToSave = {
+                    storage: "google-drive",
+                    ...client.credentials
+                };
+                fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
+                drive = google.drive({ version: 'v3', auth: client });
+
+                console.log(chalk.green(`Reauthentication successful. Retrying upload...`));
+
+                // Retry the entire operation with new credentials
+                const requestBody = {
+                    name: path.basename(file.name),
+                    parents: [await getOrCreateFolderId(pathToFile.split("/").slice(0, -1).join("/"), drive)],
+                    fields: 'id',
+                };
+                const media = {
+                    mimeType: file["mime-type"],
+                    body: fs.createReadStream(path.join(process.cwd(), file.name)),
+                };
+
+                await drive.files.create({
+                    requestBody,
+                    media: media,
+                });
+                console.log(chalk.green(`Pushed ${file.name} to storage.`));
+            } else {
+                console.log(chalk.red(`Error uploading ${file.name}: ${err.message}`));
+                throw err;
+            }
         }
     }
 }
@@ -517,34 +567,78 @@ async function pullFromGoogleDrive(files) {
         return { name: file, ...files[file] };
     });
 
-    const client = await authorizeGoogleDriveClient(false);
+    let client = await authorizeGoogleDriveClient(false);
 
-    const credentialsToSave = {
+    let credentialsToSave = {
         storage: "google-drive",
         ...client.credentials
     };
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
 
-    const drive = google.drive({ version: "v3", auth: client });
+    let drive = google.drive({ version: "v3", auth: client });
+
     try {
-        files.map(async (file) => {
-            const res = await drive.files.list({
-                q: `name='${path.basename(file.name)}' and mimeType!='application/vnd.google-apps.folder'`,
-                fields: 'files(id, name)',
-                spaces: 'drive'
-            });
-            if (res.data.files.length === 0) {
-                console.log(chalk.red(`File ${file.name} not found in Google Drive.`));
-                return;
+        await Promise.all(files.map(async (file) => {
+            try {
+                const res = await drive.files.list({
+                    q: `name='${path.basename(file.name)}' and mimeType!='application/vnd.google-apps.folder'`,
+                    fields: 'files(id, name)',
+                    spaces: 'drive'
+                });
+                if (res.data.files.length === 0) {
+                    console.log(chalk.red(`File ${file.name} not found in Google Drive.`));
+                    return;
+                }
+                const _file = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
+                const dir = path.dirname(file.name);
+                if (!fs.existsSync(dir)) {
+                    fs.mkdirSync(dir, { recursive: true });
+                }
+                fs.writeFileSync(file.name, await _file.data.text(), "utf-8");
+                console.log(chalk.green(`Pulled ${file.name} from storage.`));
+            } catch (err) {
+                // Check if error is due to invalid authentication
+                if (err.code === 401 || (err.message && (err.message.includes('invalid_grant') || err.message.includes('Invalid Credentials')))) {
+                    console.log(chalk.yellow(`Authentication failed for ${file.name}. Attempting to reauthenticate...`));
+
+                    // Delete invalid credentials and force reauthentication
+                    if (fs.existsSync(TOKEN_PATH)) {
+                        fs.unlinkSync(TOKEN_PATH);
+                    }
+
+                    client = await authorizeGoogleDriveClient(true);
+                    credentialsToSave = {
+                        storage: "google-drive",
+                        ...client.credentials
+                    };
+                    fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentialsToSave, null, 2));
+                    drive = google.drive({ version: "v3", auth: client });
+
+                    console.log(chalk.green(`Reauthentication successful. Retrying download...`));
+
+                    // Retry the download with new credentials
+                    const res = await drive.files.list({
+                        q: `name='${path.basename(file.name)}' and mimeType!='application/vnd.google-apps.folder'`,
+                        fields: 'files(id, name)',
+                        spaces: 'drive'
+                    });
+                    if (res.data.files.length === 0) {
+                        console.log(chalk.red(`File ${file.name} not found in Google Drive.`));
+                        return;
+                    }
+                    const _file = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
+                    const dir = path.dirname(file.name);
+                    if (!fs.existsSync(dir)) {
+                        fs.mkdirSync(dir, { recursive: true });
+                    }
+                    fs.writeFileSync(file.name, await _file.data.text(), "utf-8");
+                    console.log(chalk.green(`Pulled ${file.name} from storage.`));
+                } else {
+                    console.log(chalk.red(`Error downloading ${file.name}: ${err.message}`));
+                    throw err;
+                }
             }
-            const _file = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
-            const dir = path.dirname(file.name);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-            fs.writeFileSync(file.name, await _file.data.text(), "utf-8");
-            console.log(chalk.green(`Pulled ${file.name} from storage.`));
-        });
+        }));
     } catch (err) {
         throw err;
     }
