@@ -90,6 +90,32 @@ describe("Dorky CLI - E2E Tests", () => {
             const content = fs.readFileSync(envFile, "utf-8");
             expect(content).toBe("secret=google-drive-test");
         });
+
+        it("should remove file from remote when removed via rm and pushed", async () => {
+            // Initialize
+            await runCli(["--init", "google-drive"], { cwd: testDir });
+
+            // Create file
+            const testFile = path.join(testDir, "delete-me.txt");
+            fs.writeFileSync(testFile, "delete me");
+
+            // Add and Push
+            await runCli(["--add", "delete-me.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            // Ensure it's there
+            let result = await runCli(["--list", "remote"], { cwd: testDir });
+            expect(result.all).toContain("delete-me.txt");
+
+            // Remove and Push
+            await runCli(["--rm", "delete-me.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            // Ensure it's gone
+            result = await runCli(["--list", "remote"], { cwd: testDir });
+            expect(result.all).not.toContain("delete-me.txt");
+        });
+
     });
 
     describe("Complete AWS S3 workflow", () => {
@@ -136,5 +162,31 @@ describe("Dorky CLI - E2E Tests", () => {
             const content = fs.readFileSync(envFile, "utf-8");
             expect(content).toBe("secret=aws-s3-test");
         });
+
+        it("should remove file from remote when removed via rm and pushed", async () => {
+            // Initialize
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            // Create file
+            const testFile = path.join(testDir, "delete-me.txt");
+            fs.writeFileSync(testFile, "delete me");
+
+            // Add and Push
+            await runCli(["--add", "delete-me.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            // Ensure it's there
+            let result = await runCli(["--list", "remote"], { cwd: testDir });
+            expect(result.all).toContain("delete-me.txt");
+
+            // Remove and Push
+            await runCli(["--rm", "delete-me.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            // Ensure it's gone
+            result = await runCli(["--list", "remote"], { cwd: testDir });
+            expect(result.all).not.toContain("delete-me.txt");
+        });
+
     });
 });

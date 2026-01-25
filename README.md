@@ -381,8 +381,8 @@ ISC License - see [LICENSE](LICENSE) file for details.
 ## Roadmap
 
 - [x] Update README with AWS IAM policy (bug fix release)
-- [*] Handle invalid access token for Google Drive and AWS (edge cases)
-- [ ] rm + push should delete file from storage (minor release)
+- [x] Handle invalid access token for Google Drive and AWS (edge cases)
+- [x] rm + push should delete file from remote storage (minor release)
 - [ ] Uninitialize dorky setup (Bug fix release)
 - [ ] dorky --list remote --update should sync metadata according to remote (Minor release)
 - [ ] Extension for VS Code to list and highlight them like git (Major release)
@@ -390,4 +390,8 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - [ ] Encryption of files (Minor release)
 - [ ] Add stages for variables (Major release)
 - [ ] Migrate dorky project to another storage (partially implemented)
+- [ ] Add more test cases
+    - [ ] Deletion of files
+    - [ ] Edge cases for failure when credentials are invalid
+- [ ] Add coverage reports badges
 
