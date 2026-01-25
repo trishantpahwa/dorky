@@ -8,7 +8,7 @@ const path = require("path");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
 const EOL = require("os").type() == "Darwin" ? "\r\n" : "\n";
-const { GetObjectCommand, PutObjectCommand, S3Client } = require("@aws-sdk/client-s3");
+const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, S3Client } = require("@aws-sdk/client-s3");
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
 
@@ -25,7 +25,7 @@ const writeJson = (p, d) => writeFileSync(p, JSON.stringify(d, null, 2));
 
 const checkDorkyProject = () => {
     if (!existsSync(DORKY_DIR) && !existsSync(".dorkyignore")) {
-        console.log(chalk.red("This is not a dorky project. Please run `dorky --init [aws|google-drive]`"));
+        console.log(chalk.red("✖ Not a dorky project. Please run ") + chalk.cyan("dorky --init [aws|google-drive]"));
         process.exit(1);
     }
 };
@@ -57,7 +57,7 @@ function updateGitIgnore() {
     let content = existsSync(".gitignore") ? readFileSync(".gitignore").toString() : "";
     if (!content.includes(CREDENTIALS_PATH)) {
         writeFileSync(".gitignore", content + EOL + CREDENTIALS_PATH + EOL);
-        console.log(chalk.bgGreen("Updated .gitignore to ignore credentials."));
+        console.log(chalk.cyan("ℹ Updated .gitignore to secure credentials."));
     }
 }
 
@@ -92,13 +92,13 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
 }
 
 async function init(storage) {
-    if (existsSync(DORKY_DIR)) return console.log("Dorky is already initialised.");
-    if (!["aws", "google-drive"].includes(storage)) return console.log("Invalid storage option.");
+    if (existsSync(DORKY_DIR)) return console.log(chalk.yellow("⚠ Dorky is already initialized."));
+    if (!["aws", "google-drive"].includes(storage)) return console.log(chalk.red("✖ Invalid storage. Use 'aws' or 'google-drive'."));
 
     let credentials = {};
     if (storage === "aws") {
         if (!process.env.AWS_ACCESS_KEY || !process.env.AWS_SECRET_KEY || !process.env.AWS_REGION || !process.env.BUCKET_NAME) {
-            console.log(chalk.red("Missing AWS env vars."));
+            console.log(chalk.red("✖ Missing AWS environment variables."));
             return;
         }
         credentials = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME };
@@ -111,7 +111,7 @@ async function init(storage) {
     writeJson(METADATA_PATH, { "stage-1-files": {}, "uploaded-files": {} });
     writeFileSync(".dorkyignore", "");
     writeJson(CREDENTIALS_PATH, credentials);
-    console.log(chalk.bgGreen("Initialized dorky project."));
+    console.log(chalk.green("✔ Dorky project initialized successfully."));
     updateGitIgnore();
 }
 
@@ -119,22 +119,44 @@ async function list(type) {
     checkDorkyProject();
     const meta = readJson(METADATA_PATH);
     if (type === "remote") {
-        const files = Object.keys(meta["uploaded-files"]);
-        if (!files.length) return console.log(chalk.red("No remote files."));
-        console.log(chalk.green("Remote files:"));
-        files.forEach(f => console.log(chalk.green(`- ${f}`)));
+        if (!await checkCredentials()) return;
+        const creds = readJson(CREDENTIALS_PATH);
+        const root = path.basename(process.cwd());
+        console.log(chalk.blue.bold("\n☁  Remote Files:"));
+
+        if (creds.storage === "aws") {
+            await runS3(creds, async (s3, bucket) => {
+                const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
+                if (!data.Contents?.length) return console.log(chalk.yellow("ℹ No remote files found."));
+                data.Contents.forEach(o => console.log(chalk.cyan(`   ${o.Key.replace(root + "/", "")}`)));
+            });
+        } else {
+            await runDrive(async (drive) => {
+                const q = `name='${root}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
+                const { data: { files: [folder] } } = await drive.files.list({ q, fields: 'files(id)' });
+                if (!folder) return console.log(chalk.yellow("ℹ Remote folder not found."));
+                const walk = async (pid, p = '') => {
+                    const { data: { files } } = await drive.files.list({ q: `'${pid}' in parents and trashed=false`, fields: 'files(id, name, mimeType)' });
+                    for (const f of files) {
+                        if (f.mimeType === 'application/vnd.google-apps.folder') await walk(f.id, path.join(p, f.name));
+                        else console.log(chalk.cyan(`   ${path.join(p, f.name)}`));
+                    }
+                };
+                await walk(folder.id);
+            });
+        }
     } else {
-        console.log(chalk.red("Files to add:"));
+        console.log(chalk.blue.bold("\n📂 Untracked Files:"));
         const exclusions = existsSync(".dorkyignore") ? readFileSync(".dorkyignore").toString().split(EOL).filter(Boolean) : [];
         const files = await glob("**/*", { dot: true, ignore: [...exclusions.map(e => `**/${e}/**`), ...exclusions, ".dorky/**", ".dorkyignore", ".git/**", "node_modules/**"] });
 
         files.forEach(f => {
             const rel = path.relative(process.cwd(), f);
-            if (rel.includes('.env') || rel.includes('.config')) console.log(chalk.bold.bgYellowBright.red(`- ${rel} (Might be sensitive)`));
-            else console.log(chalk.red(`- ${rel}`));
+            if (rel.includes('.env') || rel.includes('.config')) console.log(chalk.yellow(`   ⚠ ${rel} (Potential sensitive file)`));
+            else console.log(chalk.gray(`   ${rel}`));
         });
-        console.log(chalk.green("\nStaged files:"));
-        Object.keys(meta["stage-1-files"]).forEach(f => console.log(chalk.green(`- ${f}`)));
+        console.log(chalk.blue.bold("\n📦 Staged Files:"));
+        Object.keys(meta["stage-1-files"]).forEach(f => console.log(chalk.green(`   ✔ ${f}`)));
     }
 }
 
@@ -143,14 +165,14 @@ function add(files) {
     const meta = readJson(METADATA_PATH);
     const added = [];
     files.forEach(f => {
-        if (!existsSync(f)) return console.log(chalk.red(`File ${f} missing.`));
+        if (!existsSync(f)) return console.log(chalk.red(`✖ File not found: ${f}`));
         const hash = md5(readFileSync(f));
-        if (meta["stage-1-files"][f]?.hash === hash) return console.log(chalk.yellow(`${f} unchanged.`));
+        if (meta["stage-1-files"][f]?.hash === hash) return console.log(chalk.gray(`• ${f} (unchanged)`));
         meta["stage-1-files"][f] = { "mime-type": mimeTypes.lookup(f) || "application/octet-stream", hash };
         added.push(f);
     });
     writeJson(METADATA_PATH, meta);
-    added.forEach(f => console.log(chalk.green(`Added ${f}`)));
+    added.forEach(f => console.log(chalk.green(`✔ Staged: ${f}`)));
 }
 
 function rm(files) {
@@ -162,7 +184,7 @@ function rm(files) {
         return true;
     });
     writeJson(METADATA_PATH, meta);
-    removed.length ? removed.forEach(f => console.log(chalk.red(`Removed ${f}`))) : console.log(chalk.red("None removed."));
+    removed.length ? removed.forEach(f => console.log(chalk.yellow(`✔ Unstaged: ${f}`))) : console.log(chalk.gray("ℹ No matching files to remove."));
 }
 
 async function checkCredentials() {
@@ -178,7 +200,7 @@ async function checkCredentials() {
         const client = await authorizeGoogleDriveClient(true);
         if (client) return true;
     } catch { }
-    console.log(chalk.red("Credentials missing."));
+    console.log(chalk.red("✖ Credentials not found. Please run --init."));
     return false;
 }
 
@@ -245,7 +267,7 @@ async function push() {
         .filter(f => !meta["uploaded-files"][f] || meta["stage-1-files"][f].hash !== meta["uploaded-files"][f].hash)
         .map(f => ({ name: f, ...meta["stage-1-files"][f] }));
 
-    if (files.length === 0) return console.log("Nothing to push.");
+    if (files.length === 0) return console.log(chalk.yellow("ℹ Nothing to push."));
 
     const creds = readJson(CREDENTIALS_PATH);
     if (creds.storage === "aws") {
@@ -253,7 +275,7 @@ async function push() {
             await Promise.all(files.map(async f => {
                 const key = path.join(path.basename(process.cwd()), f.name);
                 await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f.name) }));
-                console.log(chalk.green(`Pushed ${f.name}`));
+                console.log(chalk.green(`✔ Uploaded: ${f.name}`));
             }));
         });
     } else if (creds.storage === "google-drive") {
@@ -265,7 +287,7 @@ async function push() {
                     requestBody: { name: path.basename(f.name), parents: [parentId] },
                     media: { mimeType: f["mime-type"], body: createReadStream(f.name) }
                 });
-                console.log(chalk.green(`Pushed ${f.name}`));
+                console.log(chalk.green(`✔ Uploaded: ${f.name}`));
             }
         });
     }
@@ -289,7 +311,7 @@ async function pull() {
                 const dir = path.dirname(f);
                 if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
                 writeFileSync(f, await Body.transformToString());
-                console.log(chalk.green(`Pulled ${f}`));
+                console.log(chalk.green(`✔ Downloaded: ${f}`));
             }));
         });
     } else if (creds.storage === "google-drive") {
@@ -297,11 +319,11 @@ async function pull() {
             const fileList = Object.keys(files).map(k => ({ name: k, ...files[k] }));
             await Promise.all(fileList.map(async f => {
                 const res = await drive.files.list({ q: `name='${path.basename(f.name)}' and mimeType!='application/vnd.google-apps.folder'`, fields: 'files(id)' });
-                if (!res.data.files[0]) return console.log(chalk.red(`Missing ${f.name}`));
+                if (!res.data.files[0]) return console.log(chalk.red(`✖ Missing remote file: ${f.name}`));
                 const data = await drive.files.get({ fileId: res.data.files[0].id, alt: 'media' });
                 if (!existsSync(path.dirname(f.name))) mkdirSync(path.dirname(f.name), { recursive: true });
                 writeFileSync(f.name, await data.data.text());
-                console.log(chalk.green(`Pulled ${f.name}`));
+                console.log(chalk.green(`✔ Downloaded: ${f.name}`));
             }));
         });
     }
