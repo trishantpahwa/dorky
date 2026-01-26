@@ -80,7 +80,7 @@ describe("Dorky CLI - E2E Tests", () => {
     })
 
     describe("Complete Google Drive workdlow", () => {
-        it("should complete a full Google Drive workflow: initialize, add files, list, remove, add again, push, delete locally, and pull", async () => {
+        it("should complete a full Google Drive workflow: initialize, add files, list, remove, add again, push, delete locally, pull and destroy", async () => {
             // Initialize with Google Drive
             let result = await runCli(["--init", "google-drive"], { cwd: testDir });
             expect(result.exitCode).toBe(0);
@@ -134,7 +134,7 @@ describe("Dorky CLI - E2E Tests", () => {
     });
 
     describe("Complete AWS S3 workflow", () => {
-        it("should complete a full AWS S3 workflow: initialize, add files, list, remove, add again, push, delete locally, and pull", async () => {
+        it("should complete a full AWS S3 workflow: initialize, add files, list, remove, add again, push, delete locally, pull and destroy", async () => {
 
             // Initialize with AWS S3
             let result = await runCli(["--init", "aws"], { cwd: testDir });
