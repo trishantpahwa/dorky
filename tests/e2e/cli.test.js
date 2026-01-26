@@ -155,6 +155,12 @@ describe("Dorky CLI - E2E Tests", () => {
             // Ensure it's gone
             result = await runCli(["--list", "remote"], { cwd: testDir });
             expect(result.all).not.toContain("delete-me.txt");
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
     });
@@ -233,6 +239,12 @@ describe("Dorky CLI - E2E Tests", () => {
             // Ensure it's gone
             result = await runCli(["--list", "remote"], { cwd: testDir });
             expect(result.all).not.toContain("delete-me.txt");
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
     });

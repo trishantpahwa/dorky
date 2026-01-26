@@ -8,7 +8,7 @@ const path = require("path");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
 const EOL = require("os").type() == "Darwin" ? "\r\n" : "\n";
-const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
+const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
 
