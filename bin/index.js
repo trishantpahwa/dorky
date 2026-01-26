@@ -233,14 +233,15 @@ async function runS3(creds, fn) {
     }
 }
 
-async function getFolderId(pathStr, drive) {
+async function getFolderId(pathStr, drive, create = true) {
     let parentId = 'root';
     if (!pathStr || pathStr === '.') return parentId;
     for (const folder of pathStr.split("/")) {
         if (!folder) continue;
-        const res = await drive.files.list({ q: `name='${folder}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents`, fields: 'files(id)' });
+        const res = await drive.files.list({ q: `name='${folder}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`, fields: 'files(id)' });
         if (res.data.files[0]) parentId = res.data.files[0].id;
-        else parentId = (await drive.files.create({ requestBody: { name: folder, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }, fields: 'id' })).data.id;
+        else if (create) parentId = (await drive.files.create({ requestBody: { name: folder, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }, fields: 'id' })).data.id;
+        else return null;
     }
     return parentId;
 }
@@ -264,36 +265,66 @@ async function push() {
     checkDorkyProject();
     if (!await checkCredentials()) return;
     const meta = readJson(METADATA_PATH);
-    const files = Object.keys(meta["stage-1-files"])
+    const filesToUpload = Object.keys(meta["stage-1-files"])
         .filter(f => !meta["uploaded-files"][f] || meta["stage-1-files"][f].hash !== meta["uploaded-files"][f].hash)
         .map(f => ({ name: f, ...meta["stage-1-files"][f] }));
 
-    if (files.length === 0) return console.log(chalk.yellow("ℹ Nothing to push."));
+    const filesToDelete = Object.keys(meta["uploaded-files"])
+        .filter(f => !meta["stage-1-files"][f]);
+
+    if (filesToUpload.length === 0 && filesToDelete.length === 0) return console.log(chalk.yellow("ℹ Nothing to push."));
 
     const creds = readJson(CREDENTIALS_PATH);
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            await Promise.all(files.map(async f => {
-                const key = path.join(path.basename(process.cwd()), f.name);
-                await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f.name) }));
-                console.log(chalk.green(`✔ Uploaded: ${f.name}`));
-            }));
+            if (filesToUpload.length > 0) {
+                await Promise.all(filesToUpload.map(async f => {
+                    const key = path.join(path.basename(process.cwd()), f.name);
+                    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f.name) }));
+                    console.log(chalk.green(`✔ Uploaded: ${f.name}`));
+                }));
+            }
+            if (filesToDelete.length > 0) {
+                await Promise.all(filesToDelete.map(async f => {
+                    const key = path.join(path.basename(process.cwd()), f);
+                    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+                    console.log(chalk.yellow(`✔ Deleted remote: ${f}`));
+                }));
+            }
         });
     } else if (creds.storage === "google-drive") {
         await runDrive(async (drive) => {
-            for (const f of files) {
+            if (filesToUpload.length > 0) {
+                for (const f of filesToUpload) {
+                    const root = path.basename(process.cwd());
+                    const parentId = await getFolderId(path.dirname(path.join(root, f.name)), drive);
+                    await drive.files.create({
+                        requestBody: { name: path.basename(f.name), parents: [parentId] },
+                        media: { mimeType: f["mime-type"], body: createReadStream(f.name) }
+                    });
+                    console.log(chalk.green(`✔ Uploaded: ${f.name}`));
+                }
+            }
+            if (filesToDelete.length > 0) {
                 const root = path.basename(process.cwd());
-                const parentId = await getFolderId(path.dirname(path.join(root, f.name)), drive);
-                await drive.files.create({
-                    requestBody: { name: path.basename(f.name), parents: [parentId] },
-                    media: { mimeType: f["mime-type"], body: createReadStream(f.name) }
-                });
-                console.log(chalk.green(`✔ Uploaded: ${f.name}`));
+                for (const f of filesToDelete) {
+                    const parentId = await getFolderId(path.dirname(path.join(root, f)), drive, false);
+                    if (parentId) {
+                        const res = await drive.files.list({
+                            q: `name='${path.basename(f)}' and '${parentId}' in parents and trashed=false`,
+                            fields: 'files(id)'
+                        });
+                        if (res.data.files[0]) {
+                            await drive.files.delete({ fileId: res.data.files[0].id });
+                            console.log(chalk.yellow(`✔ Deleted remote: ${f}`));
+                        }
+                    }
+                }
             }
         });
     }
 
-    meta["uploaded-files"] = { ...meta["uploaded-files"], ...meta["stage-1-files"] };
+    meta["uploaded-files"] = { ...meta["stage-1-files"] };
     writeJson(METADATA_PATH, meta);
 }
 
