@@ -11,6 +11,8 @@
 [`DevOps Records Keeper`](https://dorky.trishantpahwa.me/)
 
 [![dorky npm](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
+[![Code coverage](https://img.shields.io/badge/coverage-87.93%25-blue)](https://npmjs.com/package/dorky)
+[![Downloads](https://img.shields.io/npm/dt/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
 
 ![Made with love in India](https://madewithlove.now.sh/in?heart=true&template=for-the-badge) `&& ` ![javascript](https://img.shields.io/badge/JavaScript-323330?style=for-the-badge&logo=javascript&logoColor=F7DF1E)
 
