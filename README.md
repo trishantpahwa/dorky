@@ -11,6 +11,8 @@
 [`DevOps Records Keeper`](https://dorky.trishantpahwa.me/)
 
 [![dorky npm](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
+[![Code coverage](https://img.shields.io/badge/coverage-87.93%25-blue)](https://npmjs.com/package/dorky)
+[![Downloads](https://img.shields.io/npm/dt/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
 
 ![Made with love in India](https://madewithlove.now.sh/in?heart=true&template=for-the-badge) `&& ` ![javascript](https://img.shields.io/badge/JavaScript-323330?style=for-the-badge&logo=javascript&logoColor=F7DF1E)
 
@@ -125,7 +127,7 @@ dorky --push
 
 ## Usage
 
-### Initialize a Project
+### Initialize a Project (`-i`)
 
 ```bash
 # For AWS S3
@@ -141,7 +143,7 @@ This creates:
 - `.dorkyignore` file for exclusion patterns
 - Updates `.gitignore` to protect credentials
 
-### List Files
+### List Files (`-l`)
 
 ```bash
 # List local files (shows what can be added)
@@ -151,7 +153,7 @@ dorky --list
 dorky --list remote
 ```
 
-### Add Files to Stage
+### Add Files to Stage (`-a`)
 
 ```bash
 # Add single file
@@ -164,7 +166,7 @@ dorky --add .env config.yml secrets.json
 dorky --add .env.production .env.staging
 ```
 
-### Remove Files from Stage
+### Remove Files from Stage (`-r`)
 
 ```bash
 # Remove single file
@@ -174,7 +176,7 @@ dorky --rm .env
 dorky --rm .env config.yml
 ```
 
-### Push Files to Storage
+### Push Files to Storage (`-ph`)
 
 ```bash
 # Push all staged files
@@ -185,9 +187,10 @@ This command:
 
 - Uploads new files
 - Updates modified files (based on hash comparison)
+- Removes files from remote storage that were unstaged using `dorky --rm`
 - Skips unchanged files
 
-### Pull Files from Storage
+### Pull Files from Storage (`-pl`)
 
 ```bash
 # Pull all tracked files
@@ -199,6 +202,19 @@ This command:
 - Downloads all tracked files from storage
 - Creates necessary directories
 - Overwrites local files
+
+### Destroy Project (`-d`)
+
+```bash
+# Destroy project locally and remotely
+dorky --destroy
+```
+
+This command:
+
+- Deletes all tracked files from remote storage
+- Removes local `.dorky/` directory and `.dorkyignore` file
+- **Warning**: This action is irreversible for remote files.
 
 ## Configuration
 
@@ -318,6 +334,8 @@ dorky --pull
 - ✅ File hash validation to skip unchanged files
 - ✅ Mime-type detection for file uploads
 - ✅ Recursive folder creation on pull
+- ✅ Destroy project and clean up remote files
+- ✅ Auto-recovery of AWS credentials from environment variables
 
 ## How It Works
 
