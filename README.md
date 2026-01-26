@@ -383,7 +383,7 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - [x] Update README with AWS IAM policy (bug fix release)
 - [x] Handle invalid access token for Google Drive and AWS (edge cases)
 - [x] rm + push should delete file from remote storage (minor release)
-- [ ] Uninitialize dorky setup (Bug fix release)
+- [x] Uninitialize dorky setup (Bug fix release)
 - [ ] dorky --list remote --update should sync metadata according to remote (Minor release)
 - [ ] Extension for VS Code to list and highlight them like git (Major release)
 - [ ] MCP server (Minor release)

@@ -80,7 +80,7 @@ describe("Dorky CLI - E2E Tests", () => {
     })
 
     describe("Complete Google Drive workdlow", () => {
-        it("should complete a full Google Drive workflow: initialize, add files, list, remove, add again, push, delete locally, and pull", async () => {
+        it("should complete a full Google Drive workflow: initialize, add files, list, remove, add again, push, delete locally, pull and destroy", async () => {
             // Initialize with Google Drive
             let result = await runCli(["--init", "google-drive"], { cwd: testDir });
             expect(result.exitCode).toBe(0);
@@ -122,6 +122,14 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(fs.existsSync(envFile)).toBe(true);
             const content = fs.readFileSync(envFile, "utf-8");
             expect(content).toBe("secret=google-drive-test");
+
+            // Destroy
+            result = await runCli(["--destroy"], { cwd: testDir });
+
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
         it("should remove file from remote when removed via rm and pushed", async () => {
@@ -147,12 +155,18 @@ describe("Dorky CLI - E2E Tests", () => {
             // Ensure it's gone
             result = await runCli(["--list", "remote"], { cwd: testDir });
             expect(result.all).not.toContain("delete-me.txt");
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
     });
 
     describe("Complete AWS S3 workflow", () => {
-        it("should complete a full AWS S3 workflow: initialize, add files, list, remove, add again, push, delete locally, and pull", async () => {
+        it("should complete a full AWS S3 workflow: initialize, add files, list, remove, add again, push, delete locally, pull and destroy", async () => {
 
             // Initialize with AWS S3
             let result = await runCli(["--init", "aws"], { cwd: testDir });
@@ -194,6 +208,12 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(fs.existsSync(envFile)).toBe(true);
             const content = fs.readFileSync(envFile, "utf-8");
             expect(content).toBe("secret=aws-s3-test");
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
         it("should remove file from remote when removed via rm and pushed", async () => {
@@ -219,6 +239,12 @@ describe("Dorky CLI - E2E Tests", () => {
             // Ensure it's gone
             result = await runCli(["--list", "remote"], { cwd: testDir });
             expect(result.all).not.toContain("delete-me.txt");
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
     });

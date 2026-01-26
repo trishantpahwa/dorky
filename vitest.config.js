@@ -6,7 +6,7 @@ export default defineConfig({
         environment: 'node',
 
         // Increase timeout for CLI E2E tests
-        testTimeout: 20000,
+        testTimeout: 60000,
 
         // Coverage configuration
         coverage: {
