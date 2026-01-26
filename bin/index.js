@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 const yargs = require("yargs");
-const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync } = require("fs");
+const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync, rmSync } = require("fs");
 const chalk = require("chalk");
 const { glob } = require("glob");
 const path = require("path");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
 const EOL = require("os").type() == "Darwin" ? "\r\n" : "\n";
-const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, S3Client } = require("@aws-sdk/client-s3");
+const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
 
@@ -49,6 +49,7 @@ const args = yargs
     .option("push", { alias: "ph", describe: "Push files", type: "string" })
     .option("pull", { alias: "pl", describe: "Pull files", type: "string" })
     .option("migrate", { alias: "m", describe: "Migrate project", type: "string" })
+    .option("destroy", { alias: "d", describe: "Destroy project", type: "boolean" })
     .help('help').strict().argv;
 
 if (Object.keys(args).length === 2 && args._.length === 0) yargs.showHelp();
@@ -329,9 +330,46 @@ async function pull() {
     }
 }
 
+async function destroy() {
+    checkDorkyProject();
+    if (!await checkCredentials()) return;
+
+    const creds = readJson(CREDENTIALS_PATH);
+    const root = path.basename(process.cwd());
+
+    if (creds.storage === "aws") {
+        await runS3(creds, async (s3, bucket) => {
+            const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
+            if (data.Contents && data.Contents.length > 0) {
+                const deleteParams = {
+                    Bucket: bucket,
+                    Delete: { Objects: data.Contents.map(o => ({ Key: o.Key })) }
+                };
+                await s3.send(new DeleteObjectsCommand(deleteParams));
+                console.log(chalk.red("✖ Remote files deleted."));
+            }
+        });
+    } else if (creds.storage === "google-drive") {
+        await runDrive(async (drive) => {
+            const q = `name='${root}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
+            const { data: { files: [folder] } } = await drive.files.list({ q, fields: 'files(id)' });
+            if (folder) {
+                await drive.files.delete({ fileId: folder.id });
+                console.log(chalk.red("✖ Remote folder deleted."));
+            }
+        });
+    }
+
+    if (existsSync(DORKY_DIR)) rmSync(DORKY_DIR, { recursive: true, force: true });
+    if (existsSync(".dorkyignore")) unlinkSync(".dorkyignore");
+
+    console.log(chalk.red("✖ Project destroyed locally."));
+}
+
 if (args.init !== undefined) init(args.init);
 if (args.list !== undefined) list(args.list);
 if (args.add !== undefined) add(args.add);
 if (args.rm !== undefined) rm(args.rm);
 if (args.push !== undefined) push();
 if (args.pull !== undefined) pull();
+if (args.destroy !== undefined) destroy();

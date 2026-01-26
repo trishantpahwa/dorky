@@ -122,6 +122,14 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(fs.existsSync(envFile)).toBe(true);
             const content = fs.readFileSync(envFile, "utf-8");
             expect(content).toBe("secret=google-drive-test");
+
+            // Destroy
+            result = await runCli(["--destroy"], { cwd: testDir });
+
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
     });
 
@@ -168,6 +176,12 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(fs.existsSync(envFile)).toBe(true);
             const content = fs.readFileSync(envFile, "utf-8");
             expect(content).toBe("secret=aws-s3-test");
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Project destroyed locally");
+            expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
+            expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
     });
 });
