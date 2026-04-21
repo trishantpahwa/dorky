@@ -34,7 +34,5 @@ jobs:
               run: npm run package
 
             - name: Publish to VS Code Marketplace
-              run: npx @vscode/vsce publish
-              env:
-                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
+              run: npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
 
