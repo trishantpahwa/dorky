@@ -3,7 +3,11 @@
   "displayName": "dorky-extension",
   "description": "Extension for dorky",
   "version": "0.0.3",
-  "publisher": "trishantpahwa",
+  "publisher": "TrishantPahwa",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trishantpahwa/dorky.git"
+  },
   "engines": {
     "vscode": "^1.108.1"
   },
