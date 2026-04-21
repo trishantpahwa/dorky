@@ -3,6 +3,7 @@
   "displayName": "dorky-extension",
   "description": "Extension for dorky",
   "version": "0.0.1",
+  "publisher": "trishantpahwa",
   "engines": {
     "vscode": "^1.108.1"
   },
@@ -122,6 +123,7 @@
   },
   "scripts": {
     "lint": "eslint .",
+    "package": "vsce package",
     "pretest": "npm run lint",
     "test": "vscode-test"
   },
@@ -129,9 +131,10 @@
     "@types/vscode": "^1.108.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "eslint": "^9.39.2",
     "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.0.0",
+    "eslint": "^9.39.2"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.679.0",
