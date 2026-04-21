@@ -29,10 +29,18 @@ jobs:
               run: npm run lint
               working-directory: extension/dorky-extension
 
+            - name: Get extension version
+              id: pkg
+              run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+              working-directory: extension/dorky-extension
+
+            - name: Package extension
+              run: npx @vscode/vsce package
+              working-directory: extension/dorky-extension
+
             - name: Publish to VS Code Marketplace
               uses: HaaLeo/publish-vscode-extension@v1
               with:
                   pat: ${{ secrets.VSCE_PAT }}
                   registryUrl: https://marketplace.visualstudio.com
-                  packagePath: extension/dorky-extension
-
+                  extensionFile: extension/dorky-extension/dorky-extension-${{ steps.pkg.outputs.version }}.vsix
