@@ -12,9 +12,6 @@ jobs:
     publish:
         name: 🧩 publish extension
         runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: extension/dorky-extension
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -26,13 +23,15 @@ jobs:
 
             - name: Install dependencies
               run: npm install
+              working-directory: extension/dorky-extension
 
             - name: Lint
               run: npm run lint
-
-            - name: Package
-              run: npm run package
+              working-directory: extension/dorky-extension
 
             - name: Publish to VS Code Marketplace
-              run: npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
-
+              uses: HaaLeo/publish-vscode-extension@v1
+              with:
+                  pat: ${{ secrets.VSCE_PAT }}
+                  registryUrl: https://marketplace.visualstudio.com
+                  packagePath: extension/dorky-extension
