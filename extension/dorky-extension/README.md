@@ -2,6 +2,14 @@
 
 A VS Code extension for [dorky](https://dorky.trishantpahwa.me/) — DevOps Records Keeper. Manage sensitive project files (`.env`, API keys, config files) stored on AWS S3 or Google Drive directly from the VS Code sidebar.
 
+> **CLI tool:** This extension is a graphical interface for the [`dorky` CLI](https://npmjs.com/package/dorky). You can use the CLI independently for terminal-based workflows or CI/CD pipelines:
+>
+> ```bash
+> npm install -g dorky
+> ```
+>
+> See the [dorky CLI documentation](https://github.com/trishantpahwa/dorky#readme) for the full list of commands.
+
 ## Features
 
 - **Sidebar panel** showing staged and uploaded files at a glance
