@@ -2,7 +2,7 @@
   "name": "dorky-extension",
   "displayName": "dorky-extension",
   "description": "Extension for dorky",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "trishantpahwa",
   "repository": {
     "type": "git",

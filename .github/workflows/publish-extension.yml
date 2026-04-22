@@ -4,7 +4,6 @@ on:
     push:
         branches:
             - main
-            - feat/extension
         paths:
             - "extension/dorky-extension/**"
 
@@ -44,3 +43,4 @@ jobs:
                   pat: ${{ secrets.VSCE_PAT }}
                   registryUrl: https://marketplace.visualstudio.com
                   extensionFile: extension/dorky-extension/dorky-extension-${{ steps.pkg.outputs.version }}.vsix
+
