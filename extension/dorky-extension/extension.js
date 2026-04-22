@@ -4,7 +4,7 @@ const path = require('path');
 const mimeTypes = require('mime-types');
 const md5 = require('md5');
 const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require('@aws-sdk/client-s3');
-const { authenticate } = require('@google-cloud/local-auth');
+const http = require('http');
 const { google } = require('googleapis');
 
 const DORKY_DIR = '.dorky';
@@ -59,18 +59,19 @@ function updateGitIgnore(root) {
 
 async function authorizeGoogleDriveClient(root, forceReauth = false) {
     const credPath = path.join(root, CREDENTIALS_PATH);
-    const gdCredPath = path.join(root, 'google-drive-credentials.json');
+    const gdCredPath = path.join(__dirname, 'google-drive-credentials.json');
 
     if (!existsSync(gdCredPath)) {
-        vscode.window.showErrorMessage('google-drive-credentials.json not found in workspace root.');
+        vscode.window.showErrorMessage(`google-drive-credentials.json not found. Place it at: ${gdCredPath}`);
         return null;
     }
+
+    const keys = readJson(gdCredPath);
+    const key = keys.installed || keys.web;
 
     if (!forceReauth && existsSync(credPath)) {
         const saved = readJson(credPath);
         if (saved.storage === 'google-drive' && saved.expiry_date) {
-            const keys = readJson(gdCredPath);
-            const key = keys.installed || keys.web;
             const client = new google.auth.OAuth2(key.client_id, key.client_secret, key.redirect_uris[0]);
             client.setCredentials(saved);
             if (Date.now() >= saved.expiry_date - 300000) {
@@ -86,11 +87,42 @@ async function authorizeGoogleDriveClient(root, forceReauth = false) {
         }
     }
 
-    const client = await authenticate({ scopes: SCOPES, keyfilePath: gdCredPath });
-    if (client?.credentials && existsSync(path.dirname(credPath))) {
-        writeJson(credPath, { storage: 'google-drive', ...client.credentials });
-    }
-    return client;
+    const redirectUri = 'http://localhost:3000/oauth2callback';
+    const oAuth2Client = new google.auth.OAuth2(key.client_id, key.client_secret, redirectUri);
+    const authUrl = oAuth2Client.generateAuthUrl({ access_type: 'offline', scope: SCOPES, prompt: 'consent' });
+
+    return new Promise((resolve, reject) => {
+        const server = http.createServer(async (req, res) => {
+            if (!req.url.startsWith('/oauth2callback')) { res.end(); return; }
+            const code = new URL(req.url, redirectUri).searchParams.get('code');
+            if (!code) { res.end('Missing code. Please try again.'); return; }
+            res.end('<html><body><h2>Authenticated! You can close this tab and return to VS Code.</h2></body></html>');
+            server.close();
+            try {
+                const { tokens } = await oAuth2Client.getToken({ code, redirect_uri: redirectUri });
+                oAuth2Client.setCredentials(tokens);
+                if (existsSync(path.dirname(credPath))) {
+                    writeJson(credPath, { storage: 'google-drive', ...tokens });
+                }
+                resolve(oAuth2Client);
+            } catch (err) {
+                reject(err);
+            }
+        });
+
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                reject(new Error('Port 3000 is already in use. Close the other process and try again.'));
+            } else {
+                reject(err);
+            }
+        });
+
+        server.listen(3000, async () => {
+            log('ℹ Opening browser for Google authentication...');
+            await vscode.env.openExternal(vscode.Uri.parse(authUrl));
+        });
+    });
 }
 
 // --- AWS ---
@@ -270,7 +302,14 @@ async function initCommand(root) {
         if (!bucket) return;
         credentials = { storage: 'aws', accessKey, secretKey, awsRegion: region, bucket };
     } else {
-        const client = await authorizeGoogleDriveClient(root, true);
+        let client;
+        try {
+            client = await authorizeGoogleDriveClient(root, true);
+        } catch (err) {
+            vscode.window.showErrorMessage(`Google Drive authentication failed: ${err.message}`);
+            log(`✖ Google Drive auth error: ${err.message}`);
+            return;
+        }
         if (!client) return;
         credentials = { storage: 'google-drive', ...client.credentials };
     }
@@ -582,6 +621,6 @@ function activate(context) {
     context.subscriptions.push(outputChannel);
 }
 
-function deactivate() {}
+function deactivate() { }
 
 module.exports = { activate, deactivate };
