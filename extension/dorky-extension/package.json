@@ -3,7 +3,7 @@
   "displayName": "dorky-extension",
   "description": "Extension for dorky",
   "version": "0.0.3",
-  "publisher": "TrishantPahwa",
+  "publisher": "trishantpahwa",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/trishantpahwa/dorky.git"
