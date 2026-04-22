@@ -12,13 +12,15 @@ A VS Code extension for [dorky](https://dorky.trishantpahwa.me/) — DevOps Reco
 
 ## Features
 
-- **Sidebar panel** showing staged and uploaded files at a glance
+- **Sidebar panel** showing staged, uploaded, and history sections at a glance
 - **Initialize** a dorky project with AWS S3 or Google Drive
 - **Stage files** using a file picker dialog
 - **Unstage files** with a single inline click in the tree
 - **Push** staged files to remote storage
 - **Pull** tracked files from remote storage
 - **List remote** files in the output channel
+- **History** — view all past push commits with date and file details
+- **Checkout** — restore files to any previous commit, from the tree or command palette
 - **Destroy** the project (removes remote files and local config)
 - Context-aware toolbar — actions only appear when relevant
 
@@ -62,13 +64,16 @@ A browser window will open for OAuth authentication when you initialize.
 The Dorky panel appears in the activity bar. Once initialized it shows:
 
 ```
-DORKY  FILES          [+] [↑] [↓] [≡] [↺] [🗑]
+DORKY  FILES          [+] [↑] [↓] [≡] [↺] [🗑] [📜] [⎇]
   aws  storage
   ▼ Staged  2 file(s)
       .env                              [−]
       config.json                       [−]
   ▼ Uploaded  1 file(s)
       .env
+  ▶ History  3 commit(s)
+      a1b2c3d4  4/23/2026 · 2 file(s) (latest)   [⎇]
+      e5f6a7b8  4/22/2026 · 1 file(s)             [⎇]
 ```
 
 ### Toolbar Actions
@@ -81,21 +86,27 @@ DORKY  FILES          [+] [↑] [↓] [≡] [↺] [🗑]
 | `≡` | List Remote | Show remote files in the Dorky output channel |
 | `↺` | Refresh | Refresh the sidebar tree |
 | `🗑` | Destroy Project | Delete remote files and local dorky config |
+| `📜` | Show History | Print full push history to the output channel |
+| `⎇` | Checkout Commit | Restore files from a past commit via QuickPick |
 
 ### Inline Actions
 
 - Click `−` next to any staged file to instantly unstage it
+- Click `⎇` next to any history commit to restore files to that snapshot
 
 ## Workflow
 
 ```
 Initialize → Add Files → Push → (share project) → Pull
+                                      ↓
+                                  History → Checkout
 ```
 
-1. **Initialize** — creates `.dorky/` with credentials and metadata, updates `.gitignore`
+1. **Initialize** — creates `.dorky/` with credentials, metadata, and history; updates `.gitignore`
 2. **Add** — stage files you want to track (file picker, multi-select)
-3. **Push** — uploads new/changed files; removes files that were unstaged
+3. **Push** — uploads new/changed files; removes unstaged files; saves a versioned commit snapshot
 4. **Pull** — downloads all tracked files on another machine
+5. **Checkout** — restores local files and metadata to any past push commit
 
 ## Output
 
@@ -118,6 +129,10 @@ npm install -g dorky
 Full documentation: [github.com/trishantpahwa/dorky](https://github.com/trishantpahwa/dorky#readme)
 
 ## Release Notes
+
+### 0.0.6
+
+Added push history and commit checkout — view all past pushes in the sidebar History section and restore files to any previous snapshot.
 
 ### 0.0.1
 

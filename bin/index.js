@@ -16,6 +16,7 @@ const { google } = require('googleapis');
 const DORKY_DIR = ".dorky";
 const METADATA_PATH = path.join(DORKY_DIR, "metadata.json");
 const CREDENTIALS_PATH = path.join(DORKY_DIR, "credentials.json");
+const HISTORY_PATH = path.join(DORKY_DIR, "history.json");
 const GD_CREDENTIALS_PATH = path.join(__dirname, "../google-drive-credentials.json");
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
@@ -50,6 +51,8 @@ const args = yargs
     .option("pull", { alias: "pl", describe: "Pull files", type: "string" })
     .option("migrate", { alias: "m", describe: "Migrate project", type: "string" })
     .option("destroy", { alias: "d", describe: "Destroy project", type: "boolean" })
+    .option("log", { alias: "lg", describe: "Show push history", type: "boolean" })
+    .option("checkout", { alias: "co", describe: "Restore files from a history commit", type: "string" })
     .help('help').strict().argv;
 
 if (Object.keys(args).length === 2 && args._.length === 0) yargs.showHelp();
@@ -110,6 +113,7 @@ async function init(storage) {
 
     mkdirSync(DORKY_DIR);
     writeJson(METADATA_PATH, { "stage-1-files": {}, "uploaded-files": {} });
+    writeJson(HISTORY_PATH, []);
     writeFileSync(".dorkyignore", "");
     writeJson(CREDENTIALS_PATH, credentials);
     console.log(chalk.green("✔ Dorky project initialized successfully."));
@@ -326,6 +330,36 @@ async function push() {
 
     meta["uploaded-files"] = { ...meta["stage-1-files"] };
     writeJson(METADATA_PATH, meta);
+
+    const commitFiles = { ...meta["stage-1-files"] };
+    const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
+    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    if (!history.find(e => e.id === commitId)) {
+        history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
+        writeJson(HISTORY_PATH, history);
+
+        const root = path.basename(process.cwd());
+        const historyPrefix = path.join(root, ".dorky-history", commitId);
+        if (creds.storage === "aws") {
+            await runS3(creds, async (s3, bucket) => {
+                await Promise.all(Object.keys(commitFiles).map(async f => {
+                    const key = path.join(historyPrefix, f);
+                    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
+                }));
+            });
+        } else if (creds.storage === "google-drive") {
+            await runDrive(async (drive) => {
+                for (const f of Object.keys(commitFiles)) {
+                    const parentId = await getFolderId(path.join(root, ".dorky-history", commitId, path.dirname(f)), drive);
+                    await drive.files.create({
+                        requestBody: { name: path.basename(f), parents: [parentId] },
+                        media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
+                    });
+                }
+            });
+        }
+        console.log(chalk.cyan(`ℹ History commit saved: ${commitId}`));
+    }
 }
 
 async function pull() {
@@ -359,6 +393,71 @@ async function pull() {
             }));
         });
     }
+}
+
+function log() {
+    checkDorkyProject();
+    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    if (!history.length) return console.log(chalk.yellow("ℹ No history found. Push some files first."));
+    console.log(chalk.blue.bold("\n📜 Push History:\n"));
+    [...history].reverse().forEach((entry, i) => {
+        const date = new Date(entry.timestamp).toLocaleString();
+        const fileCount = Object.keys(entry.files).length;
+        console.log(chalk.yellow(`  commit ${entry.id}`) + (i === 0 ? chalk.green(" (latest)") : ""));
+        console.log(chalk.gray(`  Date:  ${date}`));
+        console.log(chalk.gray(`  Files: ${fileCount}`));
+        Object.keys(entry.files).forEach(f => console.log(chalk.cyan(`    • ${f}`)));
+        console.log();
+    });
+}
+
+async function checkout(commitId) {
+    checkDorkyProject();
+    if (!await checkCredentials()) return;
+
+    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    const entry = history.find(e => e.id === commitId || e.id.startsWith(commitId));
+    if (!entry) return console.log(chalk.red(`✖ Commit not found: ${commitId}. Run --log to see available commits.`));
+
+    console.log(chalk.blue.bold(`\n⏪ Checking out commit ${entry.id} (${new Date(entry.timestamp).toLocaleString()}):\n`));
+
+    const creds = readJson(CREDENTIALS_PATH);
+    const root = path.basename(process.cwd());
+    const historyPrefix = path.join(root, ".dorky-history", entry.id);
+
+    if (creds.storage === "aws") {
+        await runS3(creds, async (s3, bucket) => {
+            await Promise.all(Object.keys(entry.files).map(async f => {
+                const key = path.join(historyPrefix, f);
+                const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+                if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
+                writeFileSync(f, await Body.transformToString());
+                console.log(chalk.green(`✔ Restored: ${f}`));
+            }));
+        });
+    } else if (creds.storage === "google-drive") {
+        await runDrive(async (drive) => {
+            for (const f of Object.keys(entry.files)) {
+                const parentId = await getFolderId(path.join(root, ".dorky-history", entry.id, path.dirname(f)), drive, false);
+                if (!parentId) { console.log(chalk.red(`✖ Remote history folder missing for: ${f}`)); continue; }
+                const res = await drive.files.list({
+                    q: `name='${path.basename(f)}' and '${parentId}' in parents and trashed=false`,
+                    fields: 'files(id)'
+                });
+                if (!res.data.files[0]) { console.log(chalk.red(`✖ Missing remote history file: ${f}`)); continue; }
+                const data = await drive.files.get({ fileId: res.data.files[0].id, alt: 'media' });
+                if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
+                writeFileSync(f, await data.data.text());
+                console.log(chalk.green(`✔ Restored: ${f}`));
+            }
+        });
+    }
+
+    const meta = readJson(METADATA_PATH);
+    meta["stage-1-files"] = { ...entry.files };
+    meta["uploaded-files"] = { ...entry.files };
+    writeJson(METADATA_PATH, meta);
+    console.log(chalk.cyan(`\nℹ Staged and uploaded state restored to commit ${entry.id}.`));
 }
 
 async function destroy() {
@@ -403,4 +502,6 @@ if (args.add !== undefined) add(args.add);
 if (args.rm !== undefined) rm(args.rm);
 if (args.push !== undefined) push();
 if (args.pull !== undefined) pull();
+if (args.log !== undefined) log();
+if (args.checkout !== undefined) checkout(args.checkout);
 if (args.destroy !== undefined) destroy();

@@ -205,6 +205,23 @@ This command:
 - Creates necessary directories
 - Overwrites local files
 
+### Show Push History (`-lg`)
+
+```bash
+dorky --log
+```
+
+Prints all past push commits in reverse chronological order, showing the commit ID, timestamp, and list of files included in each snapshot.
+
+### Checkout a Commit (`-co`)
+
+```bash
+# Restore files to a specific commit
+dorky --checkout <commit-id>
+```
+
+Downloads the files as they were at the given commit from remote storage and restores the local staged/uploaded state to match. The commit ID can be found with `--log`. Prefix matching is supported (e.g. `dorky --checkout a1b2` if the full ID is `a1b2c3d4`).
+
 ### Destroy Project (`-d`)
 
 ```bash
@@ -241,7 +258,8 @@ After initialization:
 your-project/
 ├── .dorky/
 │   ├── credentials.json    # Storage credentials (auto-ignored by git)
-│   └── metadata.json       # Tracked files metadata
+│   ├── metadata.json       # Tracked files metadata
+│   └── history.json        # Push commit history
 ├── .dorkyignore           # Exclusion patterns
 └── .gitignore             # Updated automatically
 ```
@@ -345,14 +363,17 @@ A graphical interface for dorky is available as a VS Code extension — manage s
 - ✅ Recursive folder creation on pull
 - ✅ Destroy project and clean up remote files
 - ✅ Auto-recovery of AWS credentials from environment variables
+- ✅ Push history with versioned remote snapshots
+- ✅ Restore files to any previous push commit
 
 ## How It Works
 
-1. **Initialization**: Creates `.dorky/` folder with metadata and credentials
+1. **Initialization**: Creates `.dorky/` folder with metadata, credentials, and history
 2. **File Tracking**: Maintains a hash-based registry of files in `metadata.json`
 3. **Smart Uploads**: Only uploads files that have changed (based on MD5 hash)
 4. **Auto-detection**: Highlights `.env` and `.config` files during listing
 5. **Security**: Automatically updates `.gitignore` to protect credentials
+6. **History**: Each push saves a commit entry in `history.json` and uploads a versioned snapshot to `<project>/.dorky-history/<commit-id>/` on remote storage, enabling point-in-time restore via `--checkout`
 
 ## Security Best Practices
 
@@ -415,10 +436,10 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - [x] Extension for VS Code to list and highlight them like git (Major release)
 - [ ] MCP server (Minor release)
 - [ ] Encryption of files (Minor release)
-- [ ] Add stages for variables (Major release)
+- [x] Add stages for variables (Major release)
 - [ ] Migrate dorky project to another storage (partially implemented)
 - [ ] Add more test cases
     - [ ] Deletion of files
     - [ ] Edge cases for failure when credentials are invalid
-- [ ] Add coverage reports badges
+- [x] Add coverage reports badges
 

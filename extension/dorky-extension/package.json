@@ -2,7 +2,7 @@
   "name": "dorky-extension",
   "displayName": "dorky-extension",
   "description": "Extension for dorky",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "trishantpahwa",
   "repository": {
     "type": "git",
@@ -81,6 +81,16 @@
         "command": "dorky-extension.destroy",
         "title": "Dorky: Destroy Project",
         "icon": "$(trash)"
+      },
+      {
+        "command": "dorky-extension.log",
+        "title": "Dorky: Show History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "dorky-extension.checkout",
+        "title": "Dorky: Checkout Commit",
+        "icon": "$(git-commit)"
       }
     ],
     "menus": {
@@ -114,12 +124,27 @@
           "command": "dorky-extension.destroy",
           "when": "view == dorky.filesView && dorky.initialized",
           "group": "navigation@6"
+        },
+        {
+          "command": "dorky-extension.log",
+          "when": "view == dorky.filesView && dorky.initialized",
+          "group": "navigation@7"
+        },
+        {
+          "command": "dorky-extension.checkout",
+          "when": "view == dorky.filesView && dorky.initialized",
+          "group": "navigation@8"
         }
       ],
       "view/item/context": [
         {
           "command": "dorky-extension.rmFile",
           "when": "view == dorky.filesView && viewItem == stagedFile",
+          "group": "inline"
+        },
+        {
+          "command": "dorky-extension.checkout",
+          "when": "view == dorky.filesView && viewItem == historyCommit",
           "group": "inline"
         }
       ]

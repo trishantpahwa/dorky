@@ -10,6 +10,7 @@ const { google } = require('googleapis');
 const DORKY_DIR = '.dorky';
 const METADATA_PATH = path.join(DORKY_DIR, 'metadata.json');
 const CREDENTIALS_PATH = path.join(DORKY_DIR, 'credentials.json');
+const HISTORY_PATH = path.join(DORKY_DIR, 'history.json');
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
 let outputChannel;
@@ -58,6 +59,7 @@ function updateGitIgnore(root) {
 // --- Google Drive Auth ---
 
 async function authorizeGoogleDriveClient(root, forceReauth = false) {
+
     const credPath = path.join(root, CREDENTIALS_PATH);
     const gdCredPath = path.join(__dirname, 'google-drive-credentials.json');
 
@@ -229,6 +231,8 @@ class DorkyFilesProvider {
             const meta = readJson(path.join(root, METADATA_PATH));
             const staged = Object.keys(meta['stage-1-files'] || {});
             const uploaded = Object.keys(meta['uploaded-files'] || {});
+            const historyPath = path.join(root, HISTORY_PATH);
+            const history = existsSync(historyPath) ? JSON.parse(readFileSync(historyPath)) : [];
 
             const statusItem = new DorkyItem(
                 creds.storage || 'unknown',
@@ -256,7 +260,16 @@ class DorkyFilesProvider {
             );
             uploadedSection.files = uploaded;
 
-            return [statusItem, stagedSection, uploadedSection];
+            const historySection = new DorkyItem(
+                'History',
+                vscode.TreeItemCollapsibleState.Collapsed,
+                'section-history',
+                `${history.length} commit(s)`,
+                'history'
+            );
+            historySection.commits = [...history].reverse();
+
+            return [statusItem, stagedSection, uploadedSection, historySection];
         }
 
         if (element.contextValue === 'section-staged') {
@@ -271,6 +284,23 @@ class DorkyFilesProvider {
             return (element.files || []).map(f =>
                 new DorkyItem(f, vscode.TreeItemCollapsibleState.None, 'uploadedFile', undefined, 'file-symlink-file')
             );
+        }
+
+        if (element.contextValue === 'section-history') {
+            return (element.commits || []).map((entry, i) => {
+                const date = new Date(entry.timestamp).toLocaleString();
+                const fileCount = Object.keys(entry.files).length;
+                const item = new DorkyItem(
+                    entry.id,
+                    vscode.TreeItemCollapsibleState.None,
+                    'historyCommit',
+                    `${date} · ${fileCount} file(s)${i === 0 ? ' (latest)' : ''}`,
+                    'git-commit'
+                );
+                item.commitId = entry.id;
+                item.tooltip = Object.keys(entry.files).join('\n');
+                return item;
+            });
         }
 
         return [];
@@ -316,6 +346,7 @@ async function initCommand(root) {
 
     mkdirSync(path.join(root, DORKY_DIR));
     writeJson(path.join(root, METADATA_PATH), { 'stage-1-files': {}, 'uploaded-files': {} });
+    writeJson(path.join(root, HISTORY_PATH), []);
     writeFileSync(path.join(root, '.dorkyignore'), '');
     writeJson(path.join(root, CREDENTIALS_PATH), credentials);
     updateGitIgnore(root);
@@ -451,6 +482,37 @@ async function pushCommand(root) {
 
         meta['uploaded-files'] = { ...meta['stage-1-files'] };
         writeJson(metaPath, meta);
+
+        const commitFiles = { ...meta['stage-1-files'] };
+        const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
+        const historyPath = path.join(root, HISTORY_PATH);
+        const history = existsSync(historyPath) ? JSON.parse(readFileSync(historyPath)) : [];
+        if (!history.find(e => e.id === commitId)) {
+            history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
+            writeJson(historyPath, history);
+
+            const historyPrefix = path.join(projectName, '.dorky-history', commitId);
+            if (creds.storage === 'aws') {
+                await runS3(creds, async (s3, bucket) => {
+                    await Promise.all(Object.keys(commitFiles).map(async f => {
+                        const key = path.join(historyPrefix, f).replace(/\\/g, '/');
+                        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(path.join(root, f)) }));
+                    }));
+                });
+            } else if (creds.storage === 'google-drive') {
+                await runDrive(root, async (drive) => {
+                    for (const f of Object.keys(commitFiles)) {
+                        const parentId = await getFolderId(path.join(projectName, '.dorky-history', commitId, path.dirname(f)), drive);
+                        await drive.files.create({
+                            requestBody: { name: path.basename(f), parents: [parentId] },
+                            media: { mimeType: commitFiles[f]['mime-type'], body: createReadStream(path.join(root, f)) }
+                        });
+                    }
+                });
+            }
+            log(`ℹ History commit saved: ${commitId}`);
+        }
+
         filesProvider.refresh();
         vscode.window.showInformationMessage('Push complete.');
     });
@@ -544,6 +606,104 @@ async function listRemoteCommand(root) {
     }
 }
 
+function logCommand(root) {
+    if (!checkDorkyProject(root)) return;
+    const historyPath = path.join(root, HISTORY_PATH);
+    const history = existsSync(historyPath) ? JSON.parse(readFileSync(historyPath)) : [];
+    if (!history.length) {
+        log('ℹ No history found. Push some files first.');
+        vscode.window.showInformationMessage('No history yet. Push some files first.');
+        return;
+    }
+    log('\n📜 Push History:\n');
+    [...history].reverse().forEach((entry, i) => {
+        const date = new Date(entry.timestamp).toLocaleString();
+        const fileCount = Object.keys(entry.files).length;
+        log(`  commit ${entry.id}${i === 0 ? ' (latest)' : ''}`);
+        log(`  Date:  ${date}`);
+        log(`  Files: ${fileCount}`);
+        Object.keys(entry.files).forEach(f => log(`    • ${f}`));
+        log('');
+    });
+}
+
+async function checkoutCommand(root, item) {
+    if (!checkDorkyProject(root)) return;
+    if (!await checkCredentials(root)) return;
+
+    const historyPath = path.join(root, HISTORY_PATH);
+    const history = existsSync(historyPath) ? JSON.parse(readFileSync(historyPath)) : [];
+    if (!history.length) {
+        vscode.window.showInformationMessage('No history found. Push some files first.');
+        return;
+    }
+
+    let entry;
+    if (item?.commitId) {
+        entry = history.find(e => e.id === item.commitId);
+    } else {
+        const picks = [...history].reverse().map(e => ({
+            label: `$(git-commit) ${e.id}`,
+            description: new Date(e.timestamp).toLocaleString(),
+            detail: `${Object.keys(e.files).length} file(s): ${Object.keys(e.files).join(', ')}`,
+            entry: e
+        }));
+        const selected = await vscode.window.showQuickPick(picks, { placeHolder: 'Select a commit to restore' });
+        if (!selected) return;
+        entry = selected.entry;
+    }
+
+    if (!entry) { vscode.window.showErrorMessage('Commit not found.'); return; }
+
+    const creds = readJson(path.join(root, CREDENTIALS_PATH));
+    const projectName = path.basename(root);
+
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Dorky: Restoring commit ${entry.id}...`,
+        cancellable: false
+    }, async () => {
+        if (creds.storage === 'aws') {
+            await runS3(creds, async (s3, bucket) => {
+                await Promise.all(Object.keys(entry.files).map(async f => {
+                    const key = path.join(projectName, '.dorky-history', entry.id, f).replace(/\\/g, '/');
+                    const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+                    const dir = path.dirname(path.join(root, f));
+                    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+                    writeFileSync(path.join(root, f), await Body.transformToString());
+                    log(`✔ Restored: ${f}`);
+                }));
+            });
+        } else if (creds.storage === 'google-drive') {
+            await runDrive(root, async (drive) => {
+                for (const f of Object.keys(entry.files)) {
+                    const parentId = await getFolderId(path.join(projectName, '.dorky-history', entry.id, path.dirname(f)), drive, false);
+                    if (!parentId) { log(`✖ Remote history folder missing for: ${f}`); continue; }
+                    const res = await drive.files.list({
+                        q: `name='${path.basename(f)}' and '${parentId}' in parents and trashed=false`,
+                        fields: 'files(id)'
+                    });
+                    if (!res.data.files[0]) { log(`✖ Missing remote history file: ${f}`); continue; }
+                    const data = await drive.files.get({ fileId: res.data.files[0].id, alt: 'media' });
+                    const dir = path.dirname(path.join(root, f));
+                    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+                    writeFileSync(path.join(root, f), await data.data.text());
+                    log(`✔ Restored: ${f}`);
+                }
+            });
+        }
+
+        const metaPath = path.join(root, METADATA_PATH);
+        const meta = readJson(metaPath);
+        meta['stage-1-files'] = { ...entry.files };
+        meta['uploaded-files'] = { ...entry.files };
+        writeJson(metaPath, meta);
+        filesProvider.refresh();
+        log(`ℹ Staged and uploaded state restored to commit ${entry.id}.`);
+        vscode.window.showInformationMessage(`Restored to commit ${entry.id}.`);
+    });
+}
+
 async function destroyCommand(root) {
     if (!checkDorkyProject(root)) return;
 
@@ -610,6 +770,8 @@ function activate(context) {
         ['dorky-extension.push', async () => { const r = getRoot(); if (r) await pushCommand(r); }],
         ['dorky-extension.pull', async () => { const r = getRoot(); if (r) await pullCommand(r); }],
         ['dorky-extension.listRemote', async () => { const r = getRoot(); if (r) await listRemoteCommand(r); }],
+        ['dorky-extension.log', () => { const r = getRoot(); if (r) logCommand(r); }],
+        ['dorky-extension.checkout', async (item) => { const r = getRoot(); if (r) await checkoutCommand(r, item); }],
         ['dorky-extension.refresh', () => { const r = getRoot(); if (r) { updateDorkyContext(r); filesProvider.refresh(); } }],
         ['dorky-extension.destroy', async () => { const r = getRoot(); if (r) await destroyCommand(r); }],
     ];
