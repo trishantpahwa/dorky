@@ -387,7 +387,7 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - [x] rm + push should delete file from remote storage (minor release)
 - [x] Uninitialize dorky setup (Bug fix release)
 - [ ] dorky --list remote --update should sync metadata according to remote (Minor release)
-- [ ] Extension for VS Code to list and highlight them like git (Major release)
+- [x] Extension for VS Code to list and highlight them like git (Major release)
 - [ ] MCP server (Minor release)
 - [ ] Encryption of files (Minor release)
 - [ ] Add stages for variables (Major release)
