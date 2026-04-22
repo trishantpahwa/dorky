@@ -1,0 +1,151 @@
+{
+  "name": "dorky-extension",
+  "displayName": "dorky-extension",
+  "description": "Extension for dorky",
+  "version": "0.0.4",
+  "publisher": "trishantpahwa",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trishantpahwa/dorky.git"
+  },
+  "engines": {
+    "vscode": "^1.108.1"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dorky-sidebar",
+          "title": "Dorky",
+          "icon": "media/logo.svg"
+        }
+      ]
+    },
+    "views": {
+      "dorky-sidebar": [
+        {
+          "id": "dorky.filesView",
+          "name": "Files"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "dorky.filesView",
+        "contents": "No Dorky project found in this workspace.\n[Initialize Project](command:dorky-extension.init)",
+        "when": "!dorky.initialized"
+      }
+    ],
+    "commands": [
+      {
+        "command": "dorky-extension.init",
+        "title": "Dorky: Initialize Project",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "dorky-extension.add",
+        "title": "Dorky: Add Files",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dorky-extension.rmFile",
+        "title": "Unstage",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "dorky-extension.push",
+        "title": "Dorky: Push",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "dorky-extension.pull",
+        "title": "Dorky: Pull",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "dorky-extension.listRemote",
+        "title": "Dorky: List Remote Files",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "dorky-extension.refresh",
+        "title": "Dorky: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dorky-extension.destroy",
+        "title": "Dorky: Destroy Project",
+        "icon": "$(trash)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dorky-extension.add",
+          "when": "view == dorky.filesView && dorky.initialized",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dorky-extension.push",
+          "when": "view == dorky.filesView && dorky.initialized",
+          "group": "navigation@2"
+        },
+        {
+          "command": "dorky-extension.pull",
+          "when": "view == dorky.filesView && dorky.initialized",
+          "group": "navigation@3"
+        },
+        {
+          "command": "dorky-extension.listRemote",
+          "when": "view == dorky.filesView && dorky.initialized",
+          "group": "navigation@4"
+        },
+        {
+          "command": "dorky-extension.refresh",
+          "when": "view == dorky.filesView",
+          "group": "navigation@5"
+        },
+        {
+          "command": "dorky-extension.destroy",
+          "when": "view == dorky.filesView && dorky.initialized",
+          "group": "navigation@6"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dorky-extension.rmFile",
+          "when": "view == dorky.filesView && viewItem == stagedFile",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "package": "vsce package",
+    "pretest": "npm run lint",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.108.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.0.0",
+    "eslint": "^9.39.2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.679.0",
+    "@google-cloud/local-auth": "^3.0.1",
+    "glob": "^11.1.0",
+    "googleapis": "^144.0.0",
+    "md5": "^2.3.0",
+    "mime-types": "^2.1.35"
+  }
+}

@@ -1,0 +1,46 @@
+name: "🧩 Publish VSCode Extension To Marketplace"
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - "extension/dorky-extension/**"
+
+jobs:
+    publish:
+        name: 🧩 publish extension
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24.x"
+
+            - name: Install dependencies
+              run: npm install
+              working-directory: extension/dorky-extension
+
+            - name: Lint
+              run: npm run lint
+              working-directory: extension/dorky-extension
+
+            - name: Get extension version
+              id: pkg
+              run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+              working-directory: extension/dorky-extension
+
+            - name: Package extension
+              run: npx @vscode/vsce package
+              working-directory: extension/dorky-extension
+
+            - name: Publish to VS Code Marketplace
+              uses: HaaLeo/publish-vscode-extension@v1
+              with:
+                  pat: ${{ secrets.VSCE_PAT }}
+                  registryUrl: https://marketplace.visualstudio.com
+                  extensionFile: extension/dorky-extension/dorky-extension-${{ steps.pkg.outputs.version }}.vsix
+

@@ -10,6 +10,8 @@
 
 [`DevOps Records Keeper`](https://dorky.trishantpahwa.me/)
 
+![Logo](/logo.svg)
+
 [![dorky npm](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
 [![Code coverage](https://img.shields.io/badge/coverage-87.93%25-blue)](https://npmjs.com/package/dorky)
 [![Downloads](https://img.shields.io/npm/dt/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
@@ -403,7 +405,7 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - [x] rm + push should delete file from remote storage (minor release)
 - [x] Uninitialize dorky setup (Bug fix release)
 - [ ] dorky --list remote --update should sync metadata according to remote (Minor release)
-- [ ] Extension for VS Code to list and highlight them like git (Major release)
+- [x] Extension for VS Code to list and highlight them like git (Major release)
 - [ ] MCP server (Minor release)
 - [ ] Encryption of files (Minor release)
 - [ ] Add stages for variables (Major release)

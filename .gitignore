@@ -112,3 +112,5 @@ check-google-drive/
 test
 
 .dorky/credentials.json
+.ccrag/
+.claude
