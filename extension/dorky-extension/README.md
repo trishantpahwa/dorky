@@ -107,6 +107,16 @@ All operation logs appear in the **Dorky** output channel (`View → Output → 
 - Credentials are stored locally in the `.dorky/` folder and never committed
 - Google Drive tokens are refreshed automatically; re-authentication is triggered if the token is invalid
 
+## CLI Tool
+
+This extension is a graphical companion to the [`dorky` CLI](https://npmjs.com/package/dorky). Use the CLI directly for terminal-based workflows or CI/CD pipelines:
+
+```bash
+npm install -g dorky
+```
+
+Full documentation: [github.com/trishantpahwa/dorky](https://github.com/trishantpahwa/dorky#readme)
+
 ## Release Notes
 
 ### 0.0.1

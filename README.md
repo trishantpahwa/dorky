@@ -323,6 +323,13 @@ dorky --push
 dorky --pull
 ```
 
+## VS Code Extension
+
+A graphical interface for dorky is available as a VS Code extension — manage staged and uploaded files directly from the sidebar without leaving your editor.
+
+- 📦 [dorky-extension on VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=trishantpahwa.dorky-extension)
+- 🐙 [Extension source](https://github.com/trishantpahwa/dorky/tree/main/extension/dorky-extension)
+
 ## Features
 
 - ✅ AWS S3 storage integration
