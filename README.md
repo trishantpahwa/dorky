@@ -436,7 +436,7 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - [x] Extension for VS Code to list and highlight them like git (Major release)
 - [ ] MCP server (Minor release)
 - [ ] Encryption of files (Minor release)
-- [ ] Add stages for variables (Major release)
+- [x] Add stages for variables (Major release)
 - [ ] Migrate dorky project to another storage (partially implemented)
 - [ ] Add more test cases
     - [ ] Deletion of files
