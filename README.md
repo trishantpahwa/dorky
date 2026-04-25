@@ -341,6 +341,104 @@ dorky --push
 dorky --pull
 ```
 
+## MCP Server (AI Agent Integration)
+
+dorky ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server so AI coding assistants (Claude, Cursor, VS Code Copilot, etc.) can invoke dorky commands directly from within AI-assisted workflows.
+
+### Available MCP Tools
+
+| Tool       | Description                                      |
+|------------|--------------------------------------------------|
+| `init`     | Initialize a dorky project (`aws` or `google-drive`) |
+| `list`     | List local untracked/staged files or remote files |
+| `add`      | Stage files for upload                           |
+| `remove`   | Unstage files from tracking                      |
+| `push`     | Push staged files to remote storage              |
+| `pull`     | Pull tracked files from remote storage           |
+| `log`      | Show push history                                |
+| `checkout` | Restore files from a history commit              |
+| `destroy`  | Destroy the project locally and remotely         |
+
+### Running the MCP Server
+
+```bash
+npx dorky-mcp
+```
+
+Or, if installed globally:
+
+```bash
+dorky-mcp
+```
+
+### Configuring MCP Clients
+
+#### Claude Desktop
+
+Add the following to your `claude_desktop_config.json` (usually at `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "dorky": {
+      "command": "npx",
+      "args": ["dorky-mcp"],
+      "env": {
+        "AWS_ACCESS_KEY": "your-access-key",
+        "AWS_SECRET_KEY": "your-secret-key",
+        "AWS_REGION": "us-east-1",
+        "BUCKET_NAME": "your-bucket-name"
+      }
+    }
+  }
+}
+```
+
+#### VS Code (GitHub Copilot)
+
+Add to your VS Code `settings.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "dorky": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["dorky-mcp"],
+        "env": {
+          "AWS_ACCESS_KEY": "your-access-key",
+          "AWS_SECRET_KEY": "your-secret-key",
+          "AWS_REGION": "us-east-1",
+          "BUCKET_NAME": "your-bucket-name"
+        }
+      }
+    }
+  }
+}
+```
+
+#### Cursor
+
+Add to your Cursor MCP config (`.cursor/mcp.json` in your project or `~/.cursor/mcp.json` globally):
+
+```json
+{
+  "mcpServers": {
+    "dorky": {
+      "command": "npx",
+      "args": ["dorky-mcp"],
+      "env": {
+        "AWS_ACCESS_KEY": "your-access-key",
+        "AWS_SECRET_KEY": "your-secret-key",
+        "AWS_REGION": "us-east-1",
+        "BUCKET_NAME": "your-bucket-name"
+      }
+    }
+  }
+}
+```
+
 ## VS Code Extension
 
 A graphical interface for dorky is available as a VS Code extension — manage staged and uploaded files directly from the sidebar without leaving your editor.
@@ -365,6 +463,7 @@ A graphical interface for dorky is available as a VS Code extension — manage s
 - ✅ Auto-recovery of AWS credentials from environment variables
 - ✅ Push history with versioned remote snapshots
 - ✅ Restore files to any previous push commit
+- ✅ MCP server for AI agent integration (Claude, Cursor, VS Code Copilot)
 
 ## How It Works
 
