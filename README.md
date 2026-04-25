@@ -347,17 +347,17 @@ dorky ships a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) s
 
 ### Available MCP Tools
 
-| Tool       | Description                                      |
-|------------|--------------------------------------------------|
+| Tool       | Description                                          |
+| ---------- | ---------------------------------------------------- |
 | `init`     | Initialize a dorky project (`aws` or `google-drive`) |
-| `list`     | List local untracked/staged files or remote files |
-| `add`      | Stage files for upload                           |
-| `remove`   | Unstage files from tracking                      |
-| `push`     | Push staged files to remote storage              |
-| `pull`     | Pull tracked files from remote storage           |
-| `log`      | Show push history                                |
-| `checkout` | Restore files from a history commit              |
-| `destroy`  | Destroy the project locally and remotely         |
+| `list`     | List local untracked/staged files or remote files    |
+| `add`      | Stage files for upload                               |
+| `remove`   | Unstage files from tracking                          |
+| `push`     | Push staged files to remote storage                  |
+| `pull`     | Pull tracked files from remote storage               |
+| `log`      | Show push history                                    |
+| `checkout` | Restore files from a history commit                  |
+| `destroy`  | Destroy the project locally and remotely             |
 
 ### Running the MCP Server
 
@@ -379,18 +379,18 @@ Add the following to your `claude_desktop_config.json` (usually at `~/Library/Ap
 
 ```json
 {
-  "mcpServers": {
-    "dorky": {
-      "command": "npx",
-      "args": ["dorky-mcp"],
-      "env": {
-        "AWS_ACCESS_KEY": "your-access-key",
-        "AWS_SECRET_KEY": "your-secret-key",
-        "AWS_REGION": "us-east-1",
-        "BUCKET_NAME": "your-bucket-name"
-      }
+    "mcpServers": {
+        "dorky": {
+            "command": "npx",
+            "args": ["dorky-mcp"],
+            "env": {
+                "AWS_ACCESS_KEY": "your-access-key",
+                "AWS_SECRET_KEY": "your-secret-key",
+                "AWS_REGION": "us-east-1",
+                "BUCKET_NAME": "your-bucket-name"
+            }
+        }
     }
-  }
 }
 ```
 
@@ -400,21 +400,21 @@ Add to your VS Code `settings.json`:
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "dorky": {
-        "type": "stdio",
-        "command": "npx",
-        "args": ["dorky-mcp"],
-        "env": {
-          "AWS_ACCESS_KEY": "your-access-key",
-          "AWS_SECRET_KEY": "your-secret-key",
-          "AWS_REGION": "us-east-1",
-          "BUCKET_NAME": "your-bucket-name"
+    "mcp": {
+        "servers": {
+            "dorky": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["dorky-mcp"],
+                "env": {
+                    "AWS_ACCESS_KEY": "your-access-key",
+                    "AWS_SECRET_KEY": "your-secret-key",
+                    "AWS_REGION": "us-east-1",
+                    "BUCKET_NAME": "your-bucket-name"
+                }
+            }
         }
-      }
     }
-  }
 }
 ```
 
@@ -424,18 +424,18 @@ Add to your Cursor MCP config (`.cursor/mcp.json` in your project or `~/.cursor/
 
 ```json
 {
-  "mcpServers": {
-    "dorky": {
-      "command": "npx",
-      "args": ["dorky-mcp"],
-      "env": {
-        "AWS_ACCESS_KEY": "your-access-key",
-        "AWS_SECRET_KEY": "your-secret-key",
-        "AWS_REGION": "us-east-1",
-        "BUCKET_NAME": "your-bucket-name"
-      }
+    "mcpServers": {
+        "dorky": {
+            "command": "npx",
+            "args": ["dorky-mcp"],
+            "env": {
+                "AWS_ACCESS_KEY": "your-access-key",
+                "AWS_SECRET_KEY": "your-secret-key",
+                "AWS_REGION": "us-east-1",
+                "BUCKET_NAME": "your-bucket-name"
+            }
+        }
     }
-  }
 }
 ```
 
@@ -533,7 +533,7 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - [x] Uninitialize dorky setup (Bug fix release)
 - [ ] dorky --list remote --update should sync metadata according to remote (Minor release)
 - [x] Extension for VS Code to list and highlight them like git (Major release)
-- [ ] MCP server (Minor release)
+- [x] MCP server (Minor release)
 - [ ] Encryption of files (Minor release)
 - [x] Add stages for variables (Major release)
 - [ ] Migrate dorky project to another storage (partially implemented)
