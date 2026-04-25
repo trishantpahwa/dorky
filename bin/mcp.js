@@ -472,7 +472,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
         {
             name: "init",
-            description: "Initialize a dorky project with AWS S3 or Google Drive storage.",
+            description: "Initialize a dorky project with AWS S3 or Google Drive storage. Use this when the user wants to start tracking sensitive files (e.g. .env, credentials) remotely.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -487,7 +487,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         {
             name: "list",
-            description: "List files tracked by dorky. Without arguments lists local untracked and staged files. Pass 'remote' to list files in remote storage.",
+            description: "List files tracked by dorky. Use this to discover what sensitive files (.env, credentials, configs) are available remotely when they appear to be missing locally. Without arguments lists local untracked and staged files. Pass 'remote' to list files in remote storage.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -530,7 +530,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         {
             name: "push",
-            description: "Push all staged files to remote storage (AWS S3 or Google Drive).",
+            description: "Push all staged files to remote storage (AWS S3 or Google Drive). Use this when the user has updated sensitive files (.env, credentials, configs) and wants to sync them to remote storage for teammates.",
             inputSchema: {
                 type: "object",
                 properties: {}
@@ -538,7 +538,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         {
             name: "pull",
-            description: "Pull all tracked files from remote storage to the local project.",
+            description: "Pull all tracked files from remote storage to the local project. Use this proactively whenever you detect that .env, credential, or config files are missing locally — dorky manages these sensitive files in remote storage instead of git. If a task requires environment variables or secrets that are not present, pull first before proceeding.",
             inputSchema: {
                 type: "object",
                 properties: {}

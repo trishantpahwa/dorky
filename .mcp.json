@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "ccrag": {
+      "command": "/Users/trishantpahwa/Desktop/open-source/ccrag/.venv/bin/ccrag",
+      "args": [
+        "serve",
+        "/Users/trishantpahwa/Desktop/open-source/dorky"
+      ]
+    },
+    "dorky": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "dorky-mcp"
+      ],
+      "env": {}
+    }
+  }
+}
