@@ -278,6 +278,11 @@ async function push() {
 
     if (filesToUpload.length === 0 && filesToDelete.length === 0) return console.log(chalk.yellow("ℹ Nothing to push."));
 
+    const commitFiles = { ...meta["stage-1-files"] };
+    const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
+    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    if (history.length > 0 && history[history.length - 1].id === commitId) return console.log(chalk.yellow("ℹ Already on the latest commit. Nothing to push."));
+
     const creds = readJson(CREDENTIALS_PATH);
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
@@ -331,35 +336,30 @@ async function push() {
     meta["uploaded-files"] = { ...meta["stage-1-files"] };
     writeJson(METADATA_PATH, meta);
 
-    const commitFiles = { ...meta["stage-1-files"] };
-    const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
-    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
-    if (!history.find(e => e.id === commitId)) {
-        history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
-        writeJson(HISTORY_PATH, history);
+    history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
+    writeJson(HISTORY_PATH, history);
 
-        const root = path.basename(process.cwd());
-        const historyPrefix = path.join(root, ".dorky-history", commitId);
-        if (creds.storage === "aws") {
-            await runS3(creds, async (s3, bucket) => {
-                await Promise.all(Object.keys(commitFiles).map(async f => {
-                    const key = path.join(historyPrefix, f);
-                    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
-                }));
-            });
-        } else if (creds.storage === "google-drive") {
-            await runDrive(async (drive) => {
-                for (const f of Object.keys(commitFiles)) {
-                    const parentId = await getFolderId(path.join(root, ".dorky-history", commitId, path.dirname(f)), drive);
-                    await drive.files.create({
-                        requestBody: { name: path.basename(f), parents: [parentId] },
-                        media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
-                    });
-                }
-            });
-        }
-        console.log(chalk.cyan(`ℹ History commit saved: ${commitId}`));
+    const root = path.basename(process.cwd());
+    const historyPrefix = path.join(root, ".dorky-history", commitId);
+    if (creds.storage === "aws") {
+        await runS3(creds, async (s3, bucket) => {
+            await Promise.all(Object.keys(commitFiles).map(async f => {
+                const key = path.join(historyPrefix, f);
+                await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
+            }));
+        });
+    } else if (creds.storage === "google-drive") {
+        await runDrive(async (drive) => {
+            for (const f of Object.keys(commitFiles)) {
+                const parentId = await getFolderId(path.join(root, ".dorky-history", commitId, path.dirname(f)), drive);
+                await drive.files.create({
+                    requestBody: { name: path.basename(f), parents: [parentId] },
+                    media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
+                });
+            }
+        });
     }
+    console.log(chalk.cyan(`ℹ History commit saved: ${commitId}`));
 }
 
 async function pull() {
@@ -455,9 +455,8 @@ async function checkout(commitId) {
 
     const meta = readJson(METADATA_PATH);
     meta["stage-1-files"] = { ...entry.files };
-    meta["uploaded-files"] = { ...entry.files };
     writeJson(METADATA_PATH, meta);
-    console.log(chalk.cyan(`\nℹ Staged and uploaded state restored to commit ${entry.id}.`));
+    console.log(chalk.cyan(`\nℹ Staged state restored to commit ${entry.id}. Run --push to publish this state.`));
 }
 
 async function destroy() {

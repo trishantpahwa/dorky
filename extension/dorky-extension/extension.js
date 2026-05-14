@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync, rmSync } = require('fs');
+const { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, createReadStream, unlinkSync, rmSync } = require('fs');
 const path = require('path');
 const mimeTypes = require('mime-types');
 const md5 = require('md5');
@@ -29,6 +29,22 @@ function getRoot() {
 
 const readJson = (p) => existsSync(p) ? JSON.parse(readFileSync(p)) : {};
 const writeJson = (p, d) => writeFileSync(p, JSON.stringify(d, null, 2));
+
+function walkDir(dir, root, excludes = []) {
+    const results = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+        const relPath = path.relative(root, fullPath);
+        if (entry.isDirectory()) {
+            if (!excludes.some(e => relPath === e || relPath.startsWith(e + path.sep))) {
+                results.push(...walkDir(fullPath, root, excludes));
+            }
+        } else {
+            results.push(relPath);
+        }
+    }
+    return results;
+}
 
 function log(msg) {
     outputChannel.appendLine(msg);
@@ -359,20 +375,25 @@ async function initCommand(root) {
 async function addCommand(root) {
     if (!checkDorkyProject(root)) return;
 
-    const uris = await vscode.window.showOpenDialog({
-        canSelectMany: true,
-        defaultUri: vscode.Uri.file(root),
-        openLabel: 'Stage Files'
-    });
-    if (!uris || uris.length === 0) return;
+    const excludes = ['.dorky', '.git', 'node_modules'];
+    const dorkyignorePath = path.join(root, '.dorkyignore');
+    if (existsSync(dorkyignorePath)) {
+        readFileSync(dorkyignorePath).toString().split('\n').filter(Boolean).forEach(e => excludes.push(e));
+    }
+
+    const allFiles = walkDir(root, root, excludes);
+    const selected = await vscode.window.showQuickPick(
+        allFiles.map(f => ({ label: f })),
+        { canPickMany: true, placeHolder: 'Select files to stage (including dotfiles)' }
+    );
+    if (!selected || selected.length === 0) return;
 
     const metaPath = path.join(root, METADATA_PATH);
     const meta = readJson(metaPath);
     const added = [];
 
-    uris.forEach(uri => {
-        const absPath = uri.fsPath;
-        const relPath = path.relative(root, absPath);
+    selected.forEach(({ label: relPath }) => {
+        const absPath = path.join(root, relPath);
         if (!existsSync(absPath)) { log(`✖ File not found: ${relPath}`); return; }
         const hash = md5(readFileSync(absPath));
         if (meta['stage-1-files'][relPath]?.hash === hash) { log(`• ${relPath} (unchanged)`); return; }
@@ -433,6 +454,16 @@ async function pushCommand(root) {
         return;
     }
 
+    const commitFiles = { ...meta['stage-1-files'] };
+    const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
+    const historyPath = path.join(root, HISTORY_PATH);
+    const history = existsSync(historyPath) ? JSON.parse(readFileSync(historyPath)) : [];
+    if (history.length > 0 && history[history.length - 1].id === commitId) {
+        log('ℹ Already on the latest commit. Nothing to push.');
+        vscode.window.showInformationMessage('Already on the latest commit. Nothing to push.');
+        return;
+    }
+
     const creds = readJson(path.join(root, CREDENTIALS_PATH));
     const projectName = path.basename(root);
 
@@ -483,35 +514,29 @@ async function pushCommand(root) {
         meta['uploaded-files'] = { ...meta['stage-1-files'] };
         writeJson(metaPath, meta);
 
-        const commitFiles = { ...meta['stage-1-files'] };
-        const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
-        const historyPath = path.join(root, HISTORY_PATH);
-        const history = existsSync(historyPath) ? JSON.parse(readFileSync(historyPath)) : [];
-        if (!history.find(e => e.id === commitId)) {
-            history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
-            writeJson(historyPath, history);
+        history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
+        writeJson(historyPath, history);
 
-            const historyPrefix = path.join(projectName, '.dorky-history', commitId);
-            if (creds.storage === 'aws') {
-                await runS3(creds, async (s3, bucket) => {
-                    await Promise.all(Object.keys(commitFiles).map(async f => {
-                        const key = path.join(historyPrefix, f).replace(/\\/g, '/');
-                        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(path.join(root, f)) }));
-                    }));
-                });
-            } else if (creds.storage === 'google-drive') {
-                await runDrive(root, async (drive) => {
-                    for (const f of Object.keys(commitFiles)) {
-                        const parentId = await getFolderId(path.join(projectName, '.dorky-history', commitId, path.dirname(f)), drive);
-                        await drive.files.create({
-                            requestBody: { name: path.basename(f), parents: [parentId] },
-                            media: { mimeType: commitFiles[f]['mime-type'], body: createReadStream(path.join(root, f)) }
-                        });
-                    }
-                });
-            }
-            log(`ℹ History commit saved: ${commitId}`);
+        const historyPrefix = path.join(projectName, '.dorky-history', commitId);
+        if (creds.storage === 'aws') {
+            await runS3(creds, async (s3, bucket) => {
+                await Promise.all(Object.keys(commitFiles).map(async f => {
+                    const key = path.join(historyPrefix, f).replace(/\\/g, '/');
+                    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(path.join(root, f)) }));
+                }));
+            });
+        } else if (creds.storage === 'google-drive') {
+            await runDrive(root, async (drive) => {
+                for (const f of Object.keys(commitFiles)) {
+                    const parentId = await getFolderId(path.join(projectName, '.dorky-history', commitId, path.dirname(f)), drive);
+                    await drive.files.create({
+                        requestBody: { name: path.basename(f), parents: [parentId] },
+                        media: { mimeType: commitFiles[f]['mime-type'], body: createReadStream(path.join(root, f)) }
+                    });
+                }
+            });
         }
+        log(`ℹ History commit saved: ${commitId}`);
 
         filesProvider.refresh();
         vscode.window.showInformationMessage('Push complete.');
@@ -696,11 +721,10 @@ async function checkoutCommand(root, item) {
         const metaPath = path.join(root, METADATA_PATH);
         const meta = readJson(metaPath);
         meta['stage-1-files'] = { ...entry.files };
-        meta['uploaded-files'] = { ...entry.files };
         writeJson(metaPath, meta);
         filesProvider.refresh();
-        log(`ℹ Staged and uploaded state restored to commit ${entry.id}.`);
-        vscode.window.showInformationMessage(`Restored to commit ${entry.id}.`);
+        log(`ℹ Staged state restored to commit ${entry.id}. Run push to publish this state.`);
+        vscode.window.showInformationMessage(`Restored to commit ${entry.id}. Run push to publish.`);
     });
 }
 
