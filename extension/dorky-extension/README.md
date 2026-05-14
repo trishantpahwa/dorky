@@ -14,13 +14,13 @@ A VS Code extension for [dorky](https://dorky.trishantpahwa.me/) — DevOps Reco
 
 - **Sidebar panel** showing staged, uploaded, and history sections at a glance
 - **Initialize** a dorky project with AWS S3 or Google Drive
-- **Stage files** using a file picker dialog
+- **Stage files** using a searchable QuickPick list that includes hidden dotfiles (e.g. `.env`)
 - **Unstage files** with a single inline click in the tree
 - **Push** staged files to remote storage
 - **Pull** tracked files from remote storage
 - **List remote** files in the output channel
 - **History** — view all past push commits with date and file details
-- **Checkout** — restore files to any previous commit, from the tree or command palette
+- **Checkout** — restore files to any previous commit, from the tree or command palette; run push afterward to publish the restored state as a new commit
 - **Destroy** the project (removes remote files and local config)
 - Context-aware toolbar — actions only appear when relevant
 
@@ -78,16 +78,16 @@ DORKY  FILES          [+] [↑] [↓] [≡] [↺] [🗑] [📜] [⎇]
 
 ### Toolbar Actions
 
-| Icon | Command | Description |
-|------|---------|-------------|
-| `+` | Add Files | Open file picker to stage files |
-| `↑` | Push | Upload staged files to remote storage |
-| `↓` | Pull | Download tracked files from remote storage |
-| `≡` | List Remote | Show remote files in the Dorky output channel |
-| `↺` | Refresh | Refresh the sidebar tree |
-| `🗑` | Destroy Project | Delete remote files and local dorky config |
-| `📜` | Show History | Print full push history to the output channel |
-| `⎇` | Checkout Commit | Restore files from a past commit via QuickPick |
+| Icon | Command         | Description                                                     |
+| ---- | --------------- | --------------------------------------------------------------- |
+| `+`  | Add Files       | Open a searchable QuickPick (including dotfiles) to stage files |
+| `↑`  | Push            | Upload staged files to remote storage                           |
+| `↓`  | Pull            | Download tracked files from remote storage                      |
+| `≡`  | List Remote     | Show remote files in the Dorky output channel                   |
+| `↺`  | Refresh         | Refresh the sidebar tree                                        |
+| `🗑` | Destroy Project | Delete remote files and local dorky config                      |
+| `📜` | Show History    | Print full push history to the output channel                   |
+| `⎇`  | Checkout Commit | Restore files from a past commit via QuickPick                  |
 
 ### Inline Actions
 
@@ -103,10 +103,10 @@ Initialize → Add Files → Push → (share project) → Pull
 ```
 
 1. **Initialize** — creates `.dorky/` with credentials, metadata, and history; updates `.gitignore`
-2. **Add** — stage files you want to track (file picker, multi-select)
-3. **Push** — uploads new/changed files; removes unstaged files; saves a versioned commit snapshot
+2. **Add** — stage files via a searchable QuickPick that includes dotfiles; files matching `.dorkyignore` patterns are excluded
+3. **Push** — uploads new/changed files; removes unstaged files; saves a versioned commit snapshot; skips push if the staged state already matches the latest commit
 4. **Pull** — downloads all tracked files on another machine
-5. **Checkout** — restores local files and metadata to any past push commit
+5. **Checkout** — restores local files to any past push commit and stages them; run **Push** to publish the restored state as a new commit
 
 ## Output
 
@@ -130,6 +130,12 @@ Full documentation: [github.com/trishantpahwa/dorky](https://github.com/trishant
 
 ## Release Notes
 
+### 0.0.7
+
+- Replaced native file picker with a searchable QuickPick for staging, enabling selection of hidden dotfiles (e.g. `.env`)
+- Push now exits early with an informational message when the staged state already matches the latest commit
+- Checkout no longer marks files as uploaded; run push after checkout to publish the restored state as a new commit
+
 ### 0.0.6
 
 Added push history and commit checkout — view all past pushes in the sidebar History section and restore files to any previous snapshot.
@@ -137,3 +143,4 @@ Added push history and commit checkout — view all past pushes in the sidebar H
 ### 0.0.1
 
 Initial release — full sidebar UI with AWS S3 and Google Drive support.
+

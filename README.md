@@ -191,6 +191,7 @@ This command:
 - Updates modified files (based on hash comparison)
 - Removes files from remote storage that were unstaged using `dorky --rm`
 - Skips unchanged files
+- Skips push entirely if the staged state already matches the latest commit
 
 ### Pull Files from Storage (`-pl`)
 
@@ -220,7 +221,7 @@ Prints all past push commits in reverse chronological order, showing the commit 
 dorky --checkout <commit-id>
 ```
 
-Downloads the files as they were at the given commit from remote storage and restores the local staged/uploaded state to match. The commit ID can be found with `--log`. Prefix matching is supported (e.g. `dorky --checkout a1b2` if the full ID is `a1b2c3d4`).
+Downloads the files as they were at the given commit from remote storage and stages them locally. Run `dorky --push` afterward to publish the restored state as a new commit. The commit ID can be found with `--log`. Prefix matching is supported (e.g. `dorky --checkout a1b2` if the full ID is `a1b2c3d4`).
 
 ### Destroy Project (`-d`)
 
