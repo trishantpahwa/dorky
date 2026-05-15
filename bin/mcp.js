@@ -68,7 +68,7 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
 }
 
 async function init(storage) {
-    if (existsSync(DORKY_DIR)) return "Dorky is already initialized.";
+    if (existsSync(CREDENTIALS_PATH)) return "Dorky is already initialized.";
     if (!["aws", "google-drive"].includes(storage)) return "Invalid storage. Use 'aws' or 'google-drive'.";
 
     let credentials = {};
@@ -78,14 +78,15 @@ async function init(storage) {
         }
         credentials = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME };
     } else {
+        if (!existsSync(DORKY_DIR)) mkdirSync(DORKY_DIR);
         const client = await authorizeGoogleDriveClient(true);
         credentials = { storage: "google-drive", ...client.credentials };
     }
 
-    mkdirSync(DORKY_DIR);
-    writeJson(METADATA_PATH, { "stage-1-files": {}, "uploaded-files": {} });
-    writeJson(HISTORY_PATH, []);
-    writeFileSync(".dorkyignore", "");
+    if (!existsSync(DORKY_DIR)) mkdirSync(DORKY_DIR);
+    if (!existsSync(METADATA_PATH)) writeJson(METADATA_PATH, { "stage-1-files": {}, "uploaded-files": {} });
+    if (!existsSync(HISTORY_PATH)) writeJson(HISTORY_PATH, []);
+    if (!existsSync(".dorkyignore")) writeFileSync(".dorkyignore", "");
     writeJson(CREDENTIALS_PATH, credentials);
     updateGitIgnore();
     return "Dorky project initialized successfully.";
@@ -243,6 +244,11 @@ async function push() {
 
     if (filesToUpload.length === 0 && filesToDelete.length === 0) return "Nothing to push.";
 
+    const commitFiles = { ...meta["stage-1-files"] };
+    const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
+    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    if (history.length > 0 && history[history.length - 1].id === commitId) return "Already on the latest commit. Nothing to push.";
+
     const creds = readJson(CREDENTIALS_PATH);
     const results = [];
 
@@ -295,35 +301,30 @@ async function push() {
     meta["uploaded-files"] = { ...meta["stage-1-files"] };
     writeJson(METADATA_PATH, meta);
 
-    const commitFiles = { ...meta["stage-1-files"] };
-    const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
-    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
-    if (!history.find(e => e.id === commitId)) {
-        history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
-        writeJson(HISTORY_PATH, history);
+    history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
+    writeJson(HISTORY_PATH, history);
 
-        const root = path.basename(process.cwd());
-        const historyPrefix = path.join(root, ".dorky-history", commitId);
-        if (creds.storage === "aws") {
-            await runS3(creds, async (s3, bucket) => {
-                await Promise.all(Object.keys(commitFiles).map(async f => {
-                    const key = path.join(historyPrefix, f);
-                    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
-                }));
-            });
-        } else if (creds.storage === "google-drive") {
-            await runDrive(async (drive) => {
-                for (const f of Object.keys(commitFiles)) {
-                    const parentId = await getFolderId(path.join(root, ".dorky-history", commitId, path.dirname(f)), drive);
-                    await drive.files.create({
-                        requestBody: { name: path.basename(f), parents: [parentId] },
-                        media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
-                    });
-                }
-            });
-        }
-        results.push(`History commit saved: ${commitId}`);
+    const root = path.basename(process.cwd());
+    const historyPrefix = path.join(root, ".dorky-history", commitId);
+    if (creds.storage === "aws") {
+        await runS3(creds, async (s3, bucket) => {
+            await Promise.all(Object.keys(commitFiles).map(async f => {
+                const key = path.join(historyPrefix, f);
+                await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
+            }));
+        });
+    } else if (creds.storage === "google-drive") {
+        await runDrive(async (drive) => {
+            for (const f of Object.keys(commitFiles)) {
+                const parentId = await getFolderId(path.join(root, ".dorky-history", commitId, path.dirname(f)), drive);
+                await drive.files.create({
+                    requestBody: { name: path.basename(f), parents: [parentId] },
+                    media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
+                });
+            }
+        });
     }
+    results.push(`History commit saved: ${commitId}`);
 
     return results.join("\n");
 }
@@ -422,9 +423,8 @@ async function checkout(commitId) {
 
     const meta = readJson(METADATA_PATH);
     meta["stage-1-files"] = { ...entry.files };
-    meta["uploaded-files"] = { ...entry.files };
     writeJson(METADATA_PATH, meta);
-    results.push(`Staged and uploaded state restored to commit ${entry.id}.`);
+    results.push(`Staged state restored to commit ${entry.id}. Run push to publish this state.`);
     return results.join("\n");
 }
 

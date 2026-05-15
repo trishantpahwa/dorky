@@ -96,7 +96,7 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
 }
 
 async function init(storage) {
-    if (existsSync(DORKY_DIR)) return console.log(chalk.yellow("⚠ Dorky is already initialized."));
+    if (existsSync(CREDENTIALS_PATH)) return console.log(chalk.yellow("⚠ Dorky is already initialized."));
     if (!["aws", "google-drive"].includes(storage)) return console.log(chalk.red("✖ Invalid storage. Use 'aws' or 'google-drive'."));
 
     let credentials = {};
@@ -107,14 +107,15 @@ async function init(storage) {
         }
         credentials = { storage: "aws", accessKey: process.env.AWS_ACCESS_KEY, secretKey: process.env.AWS_SECRET_KEY, awsRegion: process.env.AWS_REGION, bucket: process.env.BUCKET_NAME };
     } else {
+        if (!existsSync(DORKY_DIR)) mkdirSync(DORKY_DIR);
         const client = await authorizeGoogleDriveClient(true);
         credentials = { storage: "google-drive", ...client.credentials };
     }
 
-    mkdirSync(DORKY_DIR);
-    writeJson(METADATA_PATH, { "stage-1-files": {}, "uploaded-files": {} });
-    writeJson(HISTORY_PATH, []);
-    writeFileSync(".dorkyignore", "");
+    if (!existsSync(DORKY_DIR)) mkdirSync(DORKY_DIR);
+    if (!existsSync(METADATA_PATH)) writeJson(METADATA_PATH, { "stage-1-files": {}, "uploaded-files": {} });
+    if (!existsSync(HISTORY_PATH)) writeJson(HISTORY_PATH, []);
+    if (!existsSync(".dorkyignore")) writeFileSync(".dorkyignore", "");
     writeJson(CREDENTIALS_PATH, credentials);
     console.log(chalk.green("✔ Dorky project initialized successfully."));
     updateGitIgnore();

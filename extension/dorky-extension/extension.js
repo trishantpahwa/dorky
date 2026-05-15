@@ -326,7 +326,8 @@ class DorkyFilesProvider {
 // --- Commands ---
 
 async function initCommand(root) {
-    if (existsSync(path.join(root, DORKY_DIR))) {
+    const credPath = path.join(root, CREDENTIALS_PATH);
+    if (existsSync(credPath)) {
         vscode.window.showWarningMessage('Dorky is already initialized.');
         return;
     }
@@ -335,6 +336,8 @@ async function initCommand(root) {
         placeHolder: 'Select storage backend'
     });
     if (!storage) return;
+
+    const dorkyDir = path.join(root, DORKY_DIR);
 
     let credentials = {};
     if (storage === 'aws') {
@@ -348,6 +351,7 @@ async function initCommand(root) {
         if (!bucket) return;
         credentials = { storage: 'aws', accessKey, secretKey, awsRegion: region, bucket };
     } else {
+        if (!existsSync(dorkyDir)) mkdirSync(dorkyDir);
         let client;
         try {
             client = await authorizeGoogleDriveClient(root, true);
@@ -360,11 +364,15 @@ async function initCommand(root) {
         credentials = { storage: 'google-drive', ...client.credentials };
     }
 
-    mkdirSync(path.join(root, DORKY_DIR));
-    writeJson(path.join(root, METADATA_PATH), { 'stage-1-files': {}, 'uploaded-files': {} });
-    writeJson(path.join(root, HISTORY_PATH), []);
-    writeFileSync(path.join(root, '.dorkyignore'), '');
-    writeJson(path.join(root, CREDENTIALS_PATH), credentials);
+    const metaPath = path.join(root, METADATA_PATH);
+    const historyPath = path.join(root, HISTORY_PATH);
+    const dorkyIgnorePath = path.join(root, '.dorkyignore');
+
+    if (!existsSync(dorkyDir)) mkdirSync(dorkyDir);
+    if (!existsSync(metaPath)) writeJson(metaPath, { 'stage-1-files': {}, 'uploaded-files': {} });
+    if (!existsSync(historyPath)) writeJson(historyPath, []);
+    if (!existsSync(dorkyIgnorePath)) writeFileSync(dorkyIgnorePath, '');
+    writeJson(credPath, credentials);
     updateGitIgnore(root);
     updateDorkyContext(root);
     filesProvider.refresh();

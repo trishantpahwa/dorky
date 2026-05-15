@@ -152,9 +152,14 @@ describe("Dorky CLI - E2E Tests", () => {
             await runCli(["--rm", "delete-me.txt"], { cwd: testDir });
             await runCli(["--push"], { cwd: testDir });
 
-            // Ensure it's gone
+            // Ensure it's gone from the primary location (history copy at
+            // .dorky-history/<commitId>/delete-me.txt is expected to remain).
             result = await runCli(["--list", "remote"], { cwd: testDir });
-            expect(result.all).not.toContain("delete-me.txt");
+            const nonHistoryListing = result.all
+                .split("\n")
+                .filter(l => !l.includes(".dorky-history/"))
+                .join("\n");
+            expect(nonHistoryListing).not.toContain("delete-me.txt");
 
             result = await runCli(["--destroy"], { cwd: testDir });
             expect(result.exitCode).toBe(0);
@@ -236,9 +241,14 @@ describe("Dorky CLI - E2E Tests", () => {
             await runCli(["--rm", "delete-me.txt"], { cwd: testDir });
             await runCli(["--push"], { cwd: testDir });
 
-            // Ensure it's gone
+            // Ensure it's gone from the primary location (history copy at
+            // .dorky-history/<commitId>/delete-me.txt is expected to remain).
             result = await runCli(["--list", "remote"], { cwd: testDir });
-            expect(result.all).not.toContain("delete-me.txt");
+            const nonHistoryListing = result.all
+                .split("\n")
+                .filter(l => !l.includes(".dorky-history/"))
+                .join("\n");
+            expect(nonHistoryListing).not.toContain("delete-me.txt");
 
             result = await runCli(["--destroy"], { cwd: testDir });
             expect(result.exitCode).toBe(0);
@@ -247,5 +257,254 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
+    });
+
+    describe("Re-initialization (clone scenario)", () => {
+        it("should treat missing credentials.json as uninitialized even when .dorky/ exists", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            // Simulate clone: only credentials.json is missing (it's gitignored)
+            fs.unlinkSync(path.join(testDir, ".dorky", "credentials.json"));
+
+            const result = await runCli(["--init", "aws"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("initialized successfully");
+            expect(fs.existsSync(path.join(testDir, ".dorky", "credentials.json"))).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should preserve metadata.json, history.json, and .dorkyignore on AWS re-init", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const envFile = path.join(testDir, ".env");
+            fs.writeFileSync(envFile, "secret=preserve-aws");
+            await runCli(["--add", ".env"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const dorkyIgnore = path.join(testDir, ".dorkyignore");
+            fs.writeFileSync(dorkyIgnore, "*.tmp\nlogs/\n");
+
+            const metaPath = path.join(testDir, ".dorky", "metadata.json");
+            const historyPath = path.join(testDir, ".dorky", "history.json");
+            const credPath = path.join(testDir, ".dorky", "credentials.json");
+
+            const originalMeta = fs.readFileSync(metaPath, "utf-8");
+            const originalHistory = fs.readFileSync(historyPath, "utf-8");
+            const originalIgnore = fs.readFileSync(dorkyIgnore, "utf-8");
+
+            // Simulate clone: drop only credentials.json
+            fs.unlinkSync(credPath);
+
+            const result = await runCli(["--init", "aws"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("initialized successfully");
+
+            expect(fs.readFileSync(metaPath, "utf-8")).toBe(originalMeta);
+            expect(fs.readFileSync(historyPath, "utf-8")).toBe(originalHistory);
+            expect(fs.readFileSync(dorkyIgnore, "utf-8")).toBe(originalIgnore);
+            expect(fs.existsSync(credPath)).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should preserve metadata.json, history.json, and .dorkyignore on Google Drive re-init", async () => {
+            await runCli(["--init", "google-drive"], { cwd: testDir });
+
+            const envFile = path.join(testDir, ".env");
+            fs.writeFileSync(envFile, "secret=preserve-gd");
+            await runCli(["--add", ".env"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const dorkyIgnore = path.join(testDir, ".dorkyignore");
+            fs.writeFileSync(dorkyIgnore, "*.tmp\n");
+
+            const metaPath = path.join(testDir, ".dorky", "metadata.json");
+            const historyPath = path.join(testDir, ".dorky", "history.json");
+            const credPath = path.join(testDir, ".dorky", "credentials.json");
+
+            const originalMeta = fs.readFileSync(metaPath, "utf-8");
+            const originalHistory = fs.readFileSync(historyPath, "utf-8");
+            const originalIgnore = fs.readFileSync(dorkyIgnore, "utf-8");
+
+            fs.unlinkSync(credPath);
+
+            const result = await runCli(["--init", "google-drive"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("initialized successfully");
+
+            expect(fs.readFileSync(metaPath, "utf-8")).toBe(originalMeta);
+            expect(fs.readFileSync(historyPath, "utf-8")).toBe(originalHistory);
+            expect(fs.readFileSync(dorkyIgnore, "utf-8")).toBe(originalIgnore);
+            expect(fs.existsSync(credPath)).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should allow pulling files after re-init in a fresh clone", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const envFile = path.join(testDir, ".env");
+            fs.writeFileSync(envFile, "secret=clone-pull-test");
+            await runCli(["--add", ".env"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            // Simulate clone: keep .dorky/metadata.json, .dorky/history.json, .dorkyignore;
+            // remove credentials.json and local working files.
+            fs.unlinkSync(path.join(testDir, ".dorky", "credentials.json"));
+            fs.unlinkSync(envFile);
+
+            const initResult = await runCli(["--init", "aws"], { cwd: testDir });
+            expect(initResult.exitCode).toBe(0);
+
+            const pullResult = await runCli(["--pull"], { cwd: testDir });
+            expect(pullResult.exitCode).toBe(0);
+            expect(fs.existsSync(envFile)).toBe(true);
+            expect(fs.readFileSync(envFile, "utf-8")).toBe("secret=clone-pull-test");
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+    });
+
+    describe("Push behavior", () => {
+        it("should report 'Nothing to push' when staged state matches uploaded state", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const envFile = path.join(testDir, ".env");
+            fs.writeFileSync(envFile, "secret=no-changes");
+            await runCli(["--add", ".env"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const result = await runCli(["--push"], { cwd: testDir });
+            expect(result.all).toContain("Nothing to push");
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should report 'Already on the latest commit' when re-pushing the same committed state", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const envFile = path.join(testDir, ".env");
+            fs.writeFileSync(envFile, "secret=latest-commit");
+            await runCli(["--add", ".env"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            // Force filesToUpload to be non-empty while keeping the staged state
+            // identical to the most recent commit (the clone-then-restage scenario).
+            const metaPath = path.join(testDir, ".dorky", "metadata.json");
+            const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+            meta["uploaded-files"] = {};
+            fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
+            const result = await runCli(["--push"], { cwd: testDir });
+            expect(result.all).toContain("Already on the latest commit");
+
+            // Restore uploaded-files so destroy works cleanly
+            meta["uploaded-files"] = { ...meta["stage-1-files"] };
+            fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+    });
+
+    describe("History (log and checkout)", () => {
+        it("should report 'No history found' when --log is run before any push", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+            const result = await runCli(["--log"], { cwd: testDir });
+            expect(result.all).toContain("No history found");
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should display all push commits via --log with the latest marker", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const file = path.join(testDir, "notes.txt");
+            fs.writeFileSync(file, "v1");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            fs.writeFileSync(file, "v2");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const result = await runCli(["--log"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Push History");
+            expect(result.all).toContain("(latest)");
+            expect(result.all).toContain("notes.txt");
+
+            const commitMatches = result.all.match(/commit [a-f0-9]{8}/g) || [];
+            expect(commitMatches.length).toBe(2);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should restore files and stage-1-files to a previous commit via --checkout", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const file = path.join(testDir, "notes.txt");
+            fs.writeFileSync(file, "v1-content");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const historyPath = path.join(testDir, ".dorky", "history.json");
+            const history = JSON.parse(fs.readFileSync(historyPath, "utf-8"));
+            const firstCommit = history[0].id;
+
+            fs.writeFileSync(file, "v2-content");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            // Sanity check: working copy holds v2
+            expect(fs.readFileSync(file, "utf-8")).toBe("v2-content");
+
+            const result = await runCli(["--checkout", firstCommit], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Restored");
+            expect(result.all).toContain("notes.txt");
+            expect(result.all).toContain("Run --push to publish this state");
+
+            expect(fs.readFileSync(file, "utf-8")).toBe("v1-content");
+
+            const meta = JSON.parse(fs.readFileSync(path.join(testDir, ".dorky", "metadata.json"), "utf-8"));
+            expect(Object.keys(meta["stage-1-files"])).toEqual(["notes.txt"]);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should accept a commit-id prefix for --checkout", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const file = path.join(testDir, "notes.txt");
+            fs.writeFileSync(file, "prefix-v1");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const history = JSON.parse(fs.readFileSync(path.join(testDir, ".dorky", "history.json"), "utf-8"));
+            const prefix = history[0].id.slice(0, 4);
+
+            fs.writeFileSync(file, "prefix-v2");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const result = await runCli(["--checkout", prefix], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(fs.readFileSync(file, "utf-8")).toBe("prefix-v1");
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should fail --checkout when the commit id does not exist", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const file = path.join(testDir, "notes.txt");
+            fs.writeFileSync(file, "stub");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const result = await runCli(["--checkout", "deadbeef"], { cwd: testDir });
+            expect(result.all).toContain("Commit not found");
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
     });
 });
