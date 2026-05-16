@@ -1,7 +1,8 @@
 {
   "name": "dorky",
-  "version": "4.1.6",
+  "version": "4.1.7",
   "description": "DevOps Records Keeper.",
+  "main": "bin/index.js",
   "bin": {
     "dorky": "bin/index.js",
     "dorky-mcp": "bin/mcp.js"
