@@ -24,6 +24,23 @@ const SCOPES = ["https://www.googleapis.com/auth/drive"];
 // Helpers
 const readJson = (p) => existsSync(p) ? JSON.parse(readFileSync(p)) : {};
 const writeJson = (p, d) => writeFileSync(p, JSON.stringify(d, null, 2));
+const toPosix = (p) => p ? p.replace(/\\/g, '/') : p;
+const normalizeKeys = (obj) => {
+    if (!obj) return {};
+    const out = {};
+    for (const k of Object.keys(obj)) out[toPosix(k)] = obj[k];
+    return out;
+};
+const readMetadata = () => {
+    const meta = readJson(METADATA_PATH);
+    meta["stage-1-files"] = normalizeKeys(meta["stage-1-files"]);
+    meta["uploaded-files"] = normalizeKeys(meta["uploaded-files"]);
+    return meta;
+};
+const readHistory = () => {
+    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    return history.map(e => ({ ...e, files: normalizeKeys(e.files) }));
+};
 
 const checkDorkyProject = () => {
     if (!existsSync(DORKY_DIR) && !existsSync(".dorkyignore")) {
@@ -94,7 +111,7 @@ async function init(storage) {
 
 async function list(type) {
     checkDorkyProject();
-    const meta = readJson(METADATA_PATH);
+    const meta = readMetadata();
     const lines = [];
 
     if (type === "remote") {
@@ -130,7 +147,7 @@ async function list(type) {
         const files = await glob("**/*", { dot: true, ignore: [...exclusions.map(e => `**/${e}/**`), ...exclusions, ".dorky/**", ".dorkyignore", ".git/**", "node_modules/**"] });
 
         files.forEach(f => {
-            const rel = path.relative(process.cwd(), f);
+            const rel = toPosix(path.relative(process.cwd(), f));
             if (rel.includes(".env") || rel.includes(".config")) lines.push(`  ${rel} (Potential sensitive file)`);
             else lines.push(`  ${rel}`);
         });
@@ -143,14 +160,15 @@ async function list(type) {
 
 function add(files) {
     checkDorkyProject();
-    const meta = readJson(METADATA_PATH);
+    const meta = readMetadata();
     const results = [];
     files.forEach(f => {
         if (!existsSync(f)) { results.push(`File not found: ${f}`); return; }
         const hash = md5(readFileSync(f));
-        if (meta["stage-1-files"][f]?.hash === hash) { results.push(`${f} (unchanged)`); return; }
-        meta["stage-1-files"][f] = { "mime-type": mimeTypes.lookup(f) || "application/octet-stream", hash };
-        results.push(`Staged: ${f}`);
+        const key = toPosix(f);
+        if (meta["stage-1-files"][key]?.hash === hash) { results.push(`${key} (unchanged)`); return; }
+        meta["stage-1-files"][key] = { "mime-type": mimeTypes.lookup(f) || "application/octet-stream", hash };
+        results.push(`Staged: ${key}`);
     });
     writeJson(METADATA_PATH, meta);
     return results.join("\n");
@@ -158,10 +176,11 @@ function add(files) {
 
 function rm(files) {
     checkDorkyProject();
-    const meta = readJson(METADATA_PATH);
+    const meta = readMetadata();
     const removed = files.filter(f => {
-        if (!meta["stage-1-files"][f]) return false;
-        delete meta["stage-1-files"][f];
+        const key = toPosix(f);
+        if (!meta["stage-1-files"][key]) return false;
+        delete meta["stage-1-files"][key];
         return true;
     });
     writeJson(METADATA_PATH, meta);
@@ -236,7 +255,7 @@ async function runDrive(fn) {
 async function push() {
     checkDorkyProject();
     if (!await checkCredentials()) return "Credentials not found. Please run init first.";
-    const meta = readJson(METADATA_PATH);
+    const meta = readMetadata();
     const filesToUpload = Object.keys(meta["stage-1-files"])
         .filter(f => !meta["uploaded-files"][f] || meta["stage-1-files"][f].hash !== meta["uploaded-files"][f].hash)
         .map(f => ({ name: f, ...meta["stage-1-files"][f] }));
@@ -246,7 +265,7 @@ async function push() {
 
     const commitFiles = { ...meta["stage-1-files"] };
     const commitId = md5(JSON.stringify(commitFiles)).slice(0, 8);
-    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    const history = readHistory();
     if (history.length > 0 && history[history.length - 1].id === commitId) return "Already on the latest commit. Nothing to push.";
 
     const creds = readJson(CREDENTIALS_PATH);
@@ -256,14 +275,14 @@ async function push() {
         await runS3(creds, async (s3, bucket) => {
             if (filesToUpload.length > 0) {
                 await Promise.all(filesToUpload.map(async f => {
-                    const key = path.join(path.basename(process.cwd()), f.name);
+                    const key = path.posix.join(path.basename(process.cwd()), f.name);
                     await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f.name) }));
                     results.push(`Uploaded: ${f.name}`);
                 }));
             }
             if (filesToDelete.length > 0) {
                 await Promise.all(filesToDelete.map(async f => {
-                    const key = path.join(path.basename(process.cwd()), f);
+                    const key = path.posix.join(path.basename(process.cwd()), f);
                     await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
                     results.push(`Deleted remote: ${f}`);
                 }));
@@ -274,9 +293,9 @@ async function push() {
             if (filesToUpload.length > 0) {
                 for (const f of filesToUpload) {
                     const root = path.basename(process.cwd());
-                    const parentId = await getFolderId(path.dirname(path.join(root, f.name)), drive);
+                    const parentId = await getFolderId(path.posix.dirname(path.posix.join(root, f.name)), drive);
                     await drive.files.create({
-                        requestBody: { name: path.basename(f.name), parents: [parentId] },
+                        requestBody: { name: path.posix.basename(f.name), parents: [parentId] },
                         media: { mimeType: f["mime-type"], body: createReadStream(f.name) }
                     });
                     results.push(`Uploaded: ${f.name}`);
@@ -285,9 +304,9 @@ async function push() {
             if (filesToDelete.length > 0) {
                 const root = path.basename(process.cwd());
                 for (const f of filesToDelete) {
-                    const parentId = await getFolderId(path.dirname(path.join(root, f)), drive, false);
+                    const parentId = await getFolderId(path.posix.dirname(path.posix.join(root, f)), drive, false);
                     if (parentId) {
-                        const res = await drive.files.list({ q: `name='${path.basename(f)}' and '${parentId}' in parents and trashed=false`, fields: "files(id)" });
+                        const res = await drive.files.list({ q: `name='${path.posix.basename(f)}' and '${parentId}' in parents and trashed=false`, fields: "files(id)" });
                         if (res.data.files[0]) {
                             await drive.files.delete({ fileId: res.data.files[0].id });
                             results.push(`Deleted remote: ${f}`);
@@ -305,20 +324,20 @@ async function push() {
     writeJson(HISTORY_PATH, history);
 
     const root = path.basename(process.cwd());
-    const historyPrefix = path.join(root, ".dorky-history", commitId);
+    const historyPrefix = path.posix.join(root, ".dorky-history", commitId);
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
             await Promise.all(Object.keys(commitFiles).map(async f => {
-                const key = path.join(historyPrefix, f);
+                const key = path.posix.join(historyPrefix, f);
                 await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
             }));
         });
     } else if (creds.storage === "google-drive") {
         await runDrive(async (drive) => {
             for (const f of Object.keys(commitFiles)) {
-                const parentId = await getFolderId(path.join(root, ".dorky-history", commitId, path.dirname(f)), drive);
+                const parentId = await getFolderId(path.posix.join(root, ".dorky-history", commitId, path.posix.dirname(f)), drive);
                 await drive.files.create({
-                    requestBody: { name: path.basename(f), parents: [parentId] },
+                    requestBody: { name: path.posix.basename(f), parents: [parentId] },
                     media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
                 });
             }
@@ -332,7 +351,7 @@ async function push() {
 async function pull() {
     checkDorkyProject();
     if (!await checkCredentials()) return "Credentials not found. Please run init first.";
-    const meta = readJson(METADATA_PATH);
+    const meta = readMetadata();
     const files = meta["uploaded-files"];
     const creds = readJson(CREDENTIALS_PATH);
     const results = [];
@@ -340,7 +359,7 @@ async function pull() {
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
             await Promise.all(Object.keys(files).map(async f => {
-                const key = path.join(path.basename(process.cwd()), f);
+                const key = path.posix.join(path.basename(process.cwd()), f);
                 const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
                 const dir = path.dirname(f);
                 if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -352,7 +371,7 @@ async function pull() {
         await runDrive(async (drive) => {
             const fileList = Object.keys(files).map(k => ({ name: k, ...files[k] }));
             await Promise.all(fileList.map(async f => {
-                const res = await drive.files.list({ q: `name='${path.basename(f.name)}' and mimeType!='application/vnd.google-apps.folder'`, fields: "files(id)" });
+                const res = await drive.files.list({ q: `name='${path.posix.basename(f.name)}' and mimeType!='application/vnd.google-apps.folder'`, fields: "files(id)" });
                 if (!res.data.files[0]) { results.push(`Missing remote file: ${f.name}`); return; }
                 const data = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
                 if (!existsSync(path.dirname(f.name))) mkdirSync(path.dirname(f.name), { recursive: true });
@@ -367,7 +386,7 @@ async function pull() {
 
 function log() {
     checkDorkyProject();
-    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    const history = readHistory();
     if (!history.length) return "No history found. Push some files first.";
 
     const lines = ["Push History:"];
@@ -387,19 +406,19 @@ async function checkout(commitId) {
     checkDorkyProject();
     if (!await checkCredentials()) return "Credentials not found. Please run init first.";
 
-    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
+    const history = readHistory();
     const entry = history.find(e => e.id === commitId || e.id.startsWith(commitId));
     if (!entry) return `Commit not found: ${commitId}. Run log to see available commits.`;
 
     const creds = readJson(CREDENTIALS_PATH);
     const root = path.basename(process.cwd());
-    const historyPrefix = path.join(root, ".dorky-history", entry.id);
+    const historyPrefix = path.posix.join(root, ".dorky-history", entry.id);
     const results = [`Checking out commit ${entry.id} (${new Date(entry.timestamp).toLocaleString()}):`];
 
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
             await Promise.all(Object.keys(entry.files).map(async f => {
-                const key = path.join(historyPrefix, f);
+                const key = path.posix.join(historyPrefix, f);
                 const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
                 if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
                 writeFileSync(f, await Body.transformToString());
@@ -409,9 +428,9 @@ async function checkout(commitId) {
     } else if (creds.storage === "google-drive") {
         await runDrive(async (drive) => {
             for (const f of Object.keys(entry.files)) {
-                const parentId = await getFolderId(path.join(root, ".dorky-history", entry.id, path.dirname(f)), drive, false);
+                const parentId = await getFolderId(path.posix.join(root, ".dorky-history", entry.id, path.posix.dirname(f)), drive, false);
                 if (!parentId) { results.push(`Remote history folder missing for: ${f}`); continue; }
-                const res = await drive.files.list({ q: `name='${path.basename(f)}' and '${parentId}' in parents and trashed=false`, fields: "files(id)" });
+                const res = await drive.files.list({ q: `name='${path.posix.basename(f)}' and '${parentId}' in parents and trashed=false`, fields: "files(id)" });
                 if (!res.data.files[0]) { results.push(`Missing remote history file: ${f}`); continue; }
                 const data = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
                 if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
@@ -421,7 +440,7 @@ async function checkout(commitId) {
         });
     }
 
-    const meta = readJson(METADATA_PATH);
+    const meta = readMetadata();
     meta["stage-1-files"] = { ...entry.files };
     writeJson(METADATA_PATH, meta);
     results.push(`Staged state restored to commit ${entry.id}. Run push to publish this state.`);
