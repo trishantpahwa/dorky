@@ -43,12 +43,17 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@aws-sdk/client-s3": "^3.679.0",
     "@google-cloud/local-auth": "^3.0.1",
+    "boxen": "^5.1.2",
     "chalk": "^4.1.2",
+    "cli-table3": "^0.6.5",
     "glob": "^11.1.0",
     "googleapis": "^144.0.0",
+    "gradient-string": "^2.0.2",
     "md5": "^2.3.0",
     "mime-type": "^4.0.0",
     "mime-types": "^2.1.35",
+    "ora": "^5.4.1",
+    "prompts": "^2.4.2",
     "yargs": "^17.7.2"
   }
 }
