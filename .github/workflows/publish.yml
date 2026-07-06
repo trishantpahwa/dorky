@@ -1,4 +1,4 @@
-name: "🚀 Publish on npm"
+name: "🚀 Unified Publish"
 
 on:
     push:
@@ -6,8 +6,31 @@ on:
             - main
 
 jobs:
-    release:
-        name: 🚀 release
+    changes:
+        runs-on: ubuntu-latest
+        outputs:
+            npm: ${{ steps.filter.outputs.npm }}
+            extension: ${{ steps.filter.outputs.extension }}
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                  filters: |
+                      npm:
+                        - 'bin/**'
+                        - 'package.json'
+                        - 'package-lock.json'
+                        - 'README.md'
+                        - 'LICENSE'
+                        - 'AGENTS.md'
+                      extension:
+                        - 'extension/dorky-extension/**'
+
+    publish-npm:
+        name: 🚀 publish npm
+        needs: changes
+        if: needs.changes.outputs.npm == 'true'
         runs-on: ubuntu-latest
         permissions:
             contents: read
@@ -25,3 +48,41 @@ jobs:
               run: npm publish --access public --provenance
               env:
                   NODE_AUTH_TOKEN: ${{secrets.NPM_AUTH_TOKEN}}
+
+    publish-extension:
+        name: 🧩 publish extension
+        needs: changes
+        if: needs.changes.outputs.extension == 'true'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24.x"
+
+            - name: Install dependencies
+              run: npm install
+              working-directory: extension/dorky-extension
+
+            - name: Lint
+              run: npm run lint
+              working-directory: extension/dorky-extension
+
+            - name: Get extension version
+              id: pkg
+              run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+              working-directory: extension/dorky-extension
+
+            - name: Package extension
+              run: npx @vscode/vsce package
+              working-directory: extension/dorky-extension
+
+            - name: Publish to VS Code Marketplace
+              uses: HaaLeo/publish-vscode-extension@v1
+              with:
+                  pat: ${{ secrets.VSCE_PAT }}
+                  registryUrl: https://marketplace.visualstudio.com
+                  extensionFile: extension/dorky-extension/dorky-extension-${{ steps.pkg.outputs.version }}.vsix
