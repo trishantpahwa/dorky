@@ -39,4 +39,24 @@ module.exports = {
       encouragement: 'Happy hacking! 🍀',
     },
   },
+
+  // =============================================================================
+  // WELCOME (welcome.yml)
+  // =============================================================================
+  welcome: {
+    firstIssue: {
+      greeting: 'Welcome to the dorky community, @{commenter}! 🎉',
+      body: "Thank you for opening your first issue here! We're excited to have you.",
+      nextSteps:
+        'A maintainer will look into this soon. In the meantime, please make sure you have provided all the details requested in the template.',
+      encouragement: 'Thanks for helping make dorky better! 🚀',
+    },
+    firstPR: {
+      greeting: "Amazing work, @{commenter}! You've just opened your first Pull Request! 🏆",
+      body: "We really appreciate the time and effort you've put into this contribution.",
+      nextSteps:
+        "Our team will review your PR as soon as possible. Please ensure all tests are passing and you've linked the related issue.",
+      encouragement: "You're awesome! 🙌",
+    },
+  },
 };
