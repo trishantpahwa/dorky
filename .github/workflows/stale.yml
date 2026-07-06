@@ -1,26 +1,26 @@
 name: Mark Stale Issues and PRs
 
 on:
-  schedule:
-    - cron: '30 1 * * *'
-  workflow_dispatch:
+    schedule:
+        - cron: "30 1 * * *"
+    workflow_dispatch:
 
 jobs:
-  stale:
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
+    stale:
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+            pull-requests: write
 
-    steps:
-      - uses: actions/stale@v9
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          stale-issue-message: 'This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions!'
-          stale-pr-message: 'This PR has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions!'
-          stale-issue-label: 'stale'
-          stale-pr-label: 'stale'
-          days-before-stale: 30
-          days-before-close: 7
-          exempt-draft-pr: true
-          operations-per-run: 50
+        steps:
+            - uses: actions/stale@v9
+              with:
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+                  stale-issue-message: "This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions!"
+                  stale-pr-message: "This PR has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions!"
+                  stale-issue-label: "stale"
+                  stale-pr-label: "stale"
+                  days-before-stale: 30
+                  days-before-close: 7
+                  exempt-draft-pr: true
+                  operations-per-run: 50

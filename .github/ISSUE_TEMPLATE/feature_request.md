@@ -3,8 +3,7 @@ name: Feature Request
 about: Suggest an idea for dorky
 title: "[FEATURE] "
 labels: enhancement
-assignees: ''
-
+assignees: ""
 ---
 
 **Is your feature request related to a problem? Please describe.**

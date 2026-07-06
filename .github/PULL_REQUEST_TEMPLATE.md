@@ -21,8 +21,9 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] Test B
 
 **Test Configuration**:
-* Node.js version:
-* OS:
+
+- Node.js version:
+- OS:
 
 ## Checklist:
 
