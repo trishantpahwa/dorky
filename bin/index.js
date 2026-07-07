@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const yargs = require("yargs");
-const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync, rmSync } = require("fs");
+const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync, rmSync, statSync } = require("fs");
 const chalk = require("chalk");
 const { glob } = require("glob");
 const path = require("path");
@@ -247,6 +247,7 @@ function add(files) {
     const added = [];
     files.forEach(f => {
         if (!existsSync(f)) return console.log(chalk.red(`✖ File not found: ${f}`));
+        if (!statSync(f).isFile()) return console.log(chalk.yellow(`⚠ Skipped (not a file): ${f}`));
         const hash = md5(readFileSync(f));
         const key = toPosix(f);
         if (meta["stage-1-files"][key]?.hash === hash) return console.log(chalk.gray(`• ${key} (unchanged)`));
