@@ -1,6 +1,6 @@
 {
   "name": "dorky",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "description": "DevOps Records Keeper.",
   "main": "bin/index.js",
   "bin": {
@@ -40,9 +40,9 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@aws-sdk/client-s3": "^3.679.0",
     "@google-cloud/local-auth": "^3.0.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
     "cli-table3": "^0.6.5",

@@ -50,8 +50,9 @@ const checkDorkyProject = () => {
 
 function updateGitIgnore() {
     let content = existsSync(".gitignore") ? readFileSync(".gitignore").toString() : "";
-    if (!content.includes(CREDENTIALS_PATH)) {
-        writeFileSync(".gitignore", content + EOL + CREDENTIALS_PATH + EOL);
+    const ignoreEntry = ".dorky/credentials.json";
+    if (!content.includes(".dorky/credentials.json") && !content.includes(".dorky\\credentials.json")) {
+        writeFileSync(".gitignore", content + EOL + ignoreEntry + EOL);
     }
 }
 
