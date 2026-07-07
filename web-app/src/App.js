@@ -1,5 +1,125 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import './App.css';
+import CommunityStats from './CommunityStats';
+
+/* -------------------- hooks -------------------- */
+
+function matchMediaSafe(query) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return { matches: false, addEventListener: () => {}, removeEventListener: () => {} };
+  }
+  return window.matchMedia(query);
+}
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(() => matchMediaSafe('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => {
+    const mq = matchMediaSafe('(prefers-reduced-motion: reduce)');
+    const handler = (e) => setReduced(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return reduced;
+}
+
+function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    const stored = typeof window !== 'undefined' && localStorage.getItem('dorky-theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    return matchMediaSafe('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('dorky-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  return [theme, toggleTheme];
+}
+
+function useActiveSection(ids) {
+  const [activeId, setActiveId] = useState(ids[0]);
+  useEffect(() => {
+    const elements = ids.map((id) => document.getElementById(id)).filter(Boolean);
+    if (elements.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length > 0) {
+          const topMost = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b));
+          setActiveId(topMost.target.id);
+        }
+      },
+      { rootMargin: '-90px 0px -70% 0px', threshold: 0 }
+    );
+    elements.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [ids]);
+  return activeId;
+}
+
+/* -------------------- scroll progress + reveal -------------------- */
+
+function ScrollProgress() {
+  const barRef = useRef(null);
+  useEffect(() => {
+    let ticking = false;
+    const update = () => {
+      const scrollTop = window.scrollY;
+      const height = document.documentElement.scrollHeight - window.innerHeight;
+      const ratio = height > 0 ? scrollTop / height : 0;
+      if (barRef.current) barRef.current.style.transform = `scaleX(${ratio})`;
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(update);
+        ticking = true;
+      }
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, []);
+  return (
+    <div className="scroll-progress-track">
+      <div ref={barRef} className="scroll-progress-bar" style={{ transform: 'scaleX(0)' }} />
+    </div>
+  );
+}
+
+function Reveal({ children, className = '' }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.unobserve(el);
+        }
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -60px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={`reveal ${visible ? 'reveal-visible' : ''} ${className}`}>
+      {children}
+    </div>
+  );
+}
 
 /* -------------------- small UI primitives -------------------- */
 
@@ -13,6 +133,18 @@ function Heading({ as: Tag = 'h2', id, className = '', children }) {
 }
 
 function CodeBlock({ lang, children }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(String(children));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — ignore silently */
+    }
+  };
+
   return (
     <div className="relative my-4">
       {lang && (
@@ -20,6 +152,14 @@ function CodeBlock({ lang, children }) {
           {lang}
         </span>
       )}
+      <button
+        type="button"
+        onClick={handleCopy}
+        className={`copy-btn ${lang ? 'copy-btn-with-lang' : ''} ${copied ? 'copied' : ''}`}
+        aria-label="Copy code to clipboard"
+      >
+        {copied ? '✓ copied' : 'copy'}
+      </button>
       <pre><code>{children}</code></pre>
     </div>
   );
@@ -97,6 +237,10 @@ const tocGroups = [
     ],
   },
   {
+    title: 'Community',
+    items: [{ id: 'community', label: 'Live stats' }],
+  },
+  {
     title: 'Core concepts',
     items: [
       { id: 'how-it-works', label: 'How it works' },
@@ -144,11 +288,14 @@ const tocGroups = [
   },
 ];
 
+const allSectionIds = tocGroups.flatMap((g) => g.items.map((it) => it.id));
+
 /* -------------------- layout -------------------- */
 
-function Topbar({ onMenuToggle }) {
+function Topbar({ onMenuToggle, theme, onToggleTheme }) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800">
+      <ScrollProgress />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -165,21 +312,38 @@ function Topbar({ onMenuToggle }) {
             <Badge color="slate">docs</Badge>
           </a>
         </div>
-        <nav className="hidden sm:flex items-center gap-1 text-sm">
-          <a className="px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+        <nav className="flex items-center gap-1 text-sm">
+          <a className="hidden sm:inline-block px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
              href="https://www.npmjs.com/package/dorky" target="_blank" rel="noopener noreferrer">npm</a>
-          <a className="px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+          <a className="hidden sm:inline-block px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
              href="https://marketplace.visualstudio.com/items?itemName=trishantpahwa.dorky-extension"
              target="_blank" rel="noopener noreferrer">VS Code</a>
-          <a className="px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+          <a className="hidden sm:inline-block px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
              href="https://github.com/trishantpahwa/dorky" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <button
+            onClick={onToggleTheme}
+            className="theme-toggle"
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          >
+            {theme === 'dark' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+          </button>
         </nav>
       </div>
     </header>
   );
 }
 
-function Sidebar({ open, onNavigate }) {
+function Sidebar({ open, onNavigate, activeId }) {
   return (
     <aside
       className={`${open ? 'block' : 'hidden'} lg:block fixed lg:sticky top-14 left-0 z-30 w-64 h-[calc(100vh-3.5rem)] overflow-y-auto sidebar-scroll border-r border-slate-200 dark:border-slate-800 bg-[color:var(--sidebar-bg)]`}
@@ -191,7 +355,11 @@ function Sidebar({ open, onNavigate }) {
             <ul>
               {g.items.map((it) => (
                 <li key={it.id}>
-                  <a href={`#${it.id}`} className="toc-link" onClick={onNavigate}>
+                  <a
+                    href={`#${it.id}`}
+                    className={`toc-link ${activeId === it.id ? 'toc-link-active' : ''}`}
+                    onClick={onNavigate}
+                  >
                     {it.label}
                   </a>
                 </li>
@@ -204,37 +372,203 @@ function Sidebar({ open, onNavigate }) {
   );
 }
 
+/* -------------------- terminal mockup -------------------- */
+
+const terminalScript = [
+  { type: 'cmd', text: 'dorky --init aws' },
+  { type: 'out', text: '✔ Initialized dorky project (aws)' },
+  { type: 'cmd', text: 'dorky --add .env config.yml' },
+  { type: 'out', text: '✔ Staged 2 files' },
+  { type: 'cmd', text: 'dorky --push' },
+  { type: 'out', text: '✔ Pushed commit a1b2c3d · 2 files' },
+];
+
+function TerminalMockup() {
+  const reducedMotion = usePrefersReducedMotion();
+  const [lines, setLines] = useState(() => (reducedMotion ? terminalScript : []));
+  const [typedText, setTypedText] = useState('');
+  const windowRef = useRef(null);
+
+  useEffect(() => {
+    if (reducedMotion) return undefined;
+    let cancelled = false;
+    let lineIdx = 0;
+    let charIdx = 0;
+    let done = [];
+
+    function typeNext() {
+      if (cancelled) return;
+      if (lineIdx >= terminalScript.length) {
+        setTimeout(() => {
+          if (cancelled) return;
+          done = [];
+          lineIdx = 0;
+          charIdx = 0;
+          setLines([]);
+          setTypedText('');
+          typeNext();
+        }, 2200);
+        return;
+      }
+      const current = terminalScript[lineIdx];
+      if (current.type === 'out') {
+        done = [...done, current];
+        setLines(done);
+        setTypedText('');
+        lineIdx += 1;
+        setTimeout(typeNext, 350);
+        return;
+      }
+      charIdx += 1;
+      setTypedText(current.text.slice(0, charIdx));
+      if (charIdx >= current.text.length) {
+        done = [...done, current];
+        setLines(done);
+        setTypedText('');
+        lineIdx += 1;
+        charIdx = 0;
+        setTimeout(typeNext, 450);
+      } else {
+        setTimeout(typeNext, 35 + Math.random() * 35);
+      }
+    }
+
+    const start = setTimeout(typeNext, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(start);
+    };
+  }, [reducedMotion]);
+
+  const handleMouseMove = (e) => {
+    if (reducedMotion || !windowRef.current) return;
+    const rect = windowRef.current.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    const maxDeg = 6;
+    windowRef.current.style.setProperty('--rx', `${(px * maxDeg * 2).toFixed(2)}deg`);
+    windowRef.current.style.setProperty('--ry', `${(-py * maxDeg * 2).toFixed(2)}deg`);
+  };
+  const handleMouseLeave = () => {
+    if (!windowRef.current) return;
+    windowRef.current.style.setProperty('--rx', '0deg');
+    windowRef.current.style.setProperty('--ry', '0deg');
+  };
+
+  return (
+    <div className="terminal-perspective" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+      <div ref={windowRef} className="terminal-window">
+        <div className="terminal-titlebar">
+          <span className="terminal-dot" style={{ background: '#ff5f56' }} />
+          <span className="terminal-dot" style={{ background: '#ffbd2e' }} />
+          <span className="terminal-dot" style={{ background: '#27c93f' }} />
+        </div>
+        <div className="terminal-body">
+          {lines.map((l, i) => (
+            <div key={i} className={l.type === 'out' ? 'terminal-line-out' : ''}>
+              {l.type === 'cmd' && <span className="terminal-prompt">$</span>}
+              {l.text}
+            </div>
+          ))}
+          {!reducedMotion && typedText !== '' && (
+            <div>
+              <span className="terminal-prompt">$</span>
+              {typedText}
+              <span className="terminal-cursor" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* -------------------- content sections -------------------- */
 
-function Introduction() {
+function Hero() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyInstall = async () => {
+    try {
+      await navigator.clipboard.writeText('npm i -g dorky');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — ignore silently */
+    }
+  };
+
+  return (
+    <section className="hero">
+      <div className="hero-bg" aria-hidden="true" />
+      <div className="hero-grid">
+        <div>
+          <Heading as="h1" id="introduction" className="text-5xl font-bold tracking-tight mb-4">
+            Dorky
+          </Heading>
+          <p className="text-xl text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+            <strong>DevOps Records Keeper.</strong> Track sensitive project files — <code>.env</code>,
+            configs, API keys, certificates — outside git, with the same mental model you already use
+            for source control.
+          </p>
+
+          <div className="grid sm:grid-cols-3 gap-3 mb-2">
+            <div className="badge-pop" style={{ animationDelay: '0ms' }}>
+              <Badge color="green">git-style workflow</Badge>
+            </div>
+            <div className="badge-pop" style={{ animationDelay: '90ms' }}>
+              <Badge color="blue">AWS S3 or Google Drive</Badge>
+            </div>
+            <div className="badge-pop" style={{ animationDelay: '180ms' }}>
+              <Badge color="amber">MCP-ready</Badge>
+            </div>
+          </div>
+
+          <div className="hero-cta-row">
+            <button type="button" onClick={handleCopyInstall} className="hero-btn hero-btn-primary">
+              <code className="!bg-transparent !border-0 !p-0 text-white">
+                {copied ? '✓ Copied!' : 'npm i -g dorky'}
+              </code>
+            </button>
+            <a
+              className="hero-btn hero-btn-secondary"
+              href="https://github.com/trishantpahwa/dorky"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ⭐ Star on GitHub
+            </a>
+          </div>
+
+          <p className="mt-6">
+            Dorky ships three surfaces against the same on-disk format: a CLI, a VS Code extension, and an
+            MCP server. You can mix and match them inside the same project — staging files in your editor
+            and pushing from your terminal works the way you'd expect.
+          </p>
+
+          <Callout type="info" title="Who is this for?">
+            Teams that share secrets across machines without committing them. If you've ever lost an
+            afternoon onboarding a new developer to a half-documented bundle of <code>.env</code>
+            files, this is for you.
+          </Callout>
+        </div>
+
+        <div>
+          <TerminalMockup />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CommunitySection() {
   return (
     <section>
-      <Heading as="h1" id="introduction" className="text-5xl font-bold tracking-tight mb-4">
-        Dorky
-      </Heading>
-      <p className="text-xl text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
-        <strong>DevOps Records Keeper.</strong> Track sensitive project files — <code>.env</code>,
-        configs, API keys, certificates — outside git, with the same mental model you already use
-        for source control.
+      <Heading as="h2" id="community" className="text-3xl font-semibold mt-14 mb-4">Live stats</Heading>
+      <p className="text-slate-600 dark:text-slate-400 mb-2">
+        Pulled live from GitHub and npm — stars, forks, roadmap progress, and what's happening right now.
       </p>
-
-      <div className="grid sm:grid-cols-3 gap-3 mb-6">
-        <Badge color="green">git-style workflow</Badge>
-        <Badge color="blue">AWS S3 or Google Drive</Badge>
-        <Badge color="amber">MCP-ready</Badge>
-      </div>
-
-      <p>
-        Dorky ships three surfaces against the same on-disk format: a CLI, a VS Code extension, and an
-        MCP server. You can mix and match them inside the same project — staging files in your editor
-        and pushing from your terminal works the way you'd expect.
-      </p>
-
-      <Callout type="info" title="Who is this for?">
-        Teams that share secrets across machines without committing them. If you've ever lost an
-        afternoon onboarding a new developer to a half-documented bundle of <code>.env</code>
-        files, this is for you.
-      </Callout>
+      <CommunityStats />
     </section>
   );
 }
@@ -345,6 +679,68 @@ function Prerequisites() {
   );
 }
 
+const awsSteps = [
+  { label: 'Local file', desc: '.env, config.yml, certs — anything staged with --add.' },
+  { label: 'Hash (MD5)', desc: 'Recorded in metadata.json to detect changes.' },
+  { label: 'Upload to S3', desc: 'Only changed files are sent on --push.' },
+  { label: 'History snapshot', desc: 'Versioned copy at .dorky-history/<commit-id>/.' },
+];
+
+const driveSteps = [
+  { label: 'Local file', desc: '.env, secrets.json — anything staged with --add.' },
+  { label: 'Hash (MD5)', desc: 'Recorded in metadata.json to detect changes.' },
+  { label: 'OAuth upload', desc: 'Sent to Google Drive via your authorized account.' },
+  { label: 'History snapshot', desc: 'Versioned copy in a .dorky-history/<commit-id>/ folder.' },
+];
+
+function StepPipeline({ steps }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.unobserve(el);
+        }
+      },
+      { threshold: 0.2 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="step-pipeline">
+      {steps.map((step, i) => (
+        <Fragment key={step.label}>
+          <div
+            className={`step-card ${visible ? 'step-card-visible' : ''}`}
+            style={{ transitionDelay: visible ? `${i * 110}ms` : '0ms' }}
+          >
+            <div className="step-index">{i + 1}</div>
+            <div className="step-label">{step.label}</div>
+            <div className="step-desc">{step.desc}</div>
+          </div>
+          {i < steps.length - 1 && (
+            <div
+              className={`step-arrow ${visible ? 'step-arrow-visible' : ''}`}
+              style={{ transitionDelay: visible ? `${i * 110 + 60}ms` : '0ms' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </div>
+          )}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 function HowItWorks() {
   return (
     <section>
@@ -356,27 +752,19 @@ function HowItWorks() {
         <li><strong>History</strong> records each push in <code>history.json</code> and uploads a versioned snapshot to <code>&lt;project&gt;/.dorky-history/&lt;commit-id&gt;/</code>, enabling point-in-time restore via <code>--checkout</code>.</li>
         <li><strong>Security</strong> auto-detects <code>.env</code> and <code>.config</code> files when listing, and always ignores its own credentials file in git.</li>
       </ol>
-      <div className="flex flex-col gap-8 my-8">
-        <figure className="border border-slate-200 dark:border-slate-800 rounded-xl p-5 bg-white dark:bg-slate-900/40 shadow-sm">
-          <img
-            alt="AWS S3 workflow"
-            src="https://github.com/trishantpahwa/dorky/raw/main/dorky-usage-aws.svg"
-            className="w-full h-auto block"
-          />
-          <figcaption className="text-base text-slate-600 dark:text-slate-400 mt-4 text-center">
+      <div className="flex flex-col gap-10 my-8">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
             AWS S3 workflow
-          </figcaption>
-        </figure>
-        <figure className="border border-slate-200 dark:border-slate-800 rounded-xl p-5 bg-white dark:bg-slate-900/40 shadow-sm">
-          <img
-            alt="Google Drive workflow"
-            src="https://github.com/trishantpahwa/dorky/raw/main/dorky-usage-google-drive.svg"
-            className="w-full h-auto block"
-          />
-          <figcaption className="text-base text-slate-600 dark:text-slate-400 mt-4 text-center">
+          </p>
+          <StepPipeline steps={awsSteps} />
+        </div>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
             Google Drive workflow
-          </figcaption>
-        </figure>
+          </p>
+          <StepPipeline steps={driveSteps} />
+        </div>
       </div>
     </section>
   );
@@ -462,7 +850,7 @@ function CliReference() {
         Run <code>dorky --help</code> for the live, version-pinned reference. Every flag has a short
         alias, so any command can be expressed in two or three keystrokes.
       </p>
-      <div className="overflow-x-auto my-4">
+      <div className="overflow-x-auto my-4 rounded-lg elevate-hover">
         <table className="w-full text-base border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
           <thead className="bg-slate-50 dark:bg-slate-900/40 text-left">
             <tr>
@@ -545,7 +933,7 @@ function VSCodeExtension() {
       </p>
 
       <Heading as="h3" id="vscode-commands" className="text-xl font-semibold mt-8 mb-3">Commands</Heading>
-      <div className="overflow-x-auto my-3">
+      <div className="overflow-x-auto my-3 rounded-lg elevate-hover">
         <table className="w-full text-base border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
           <thead className="bg-slate-50 dark:bg-slate-900/40 text-left">
             <tr>
@@ -599,7 +987,7 @@ function McpServer() {
       </p>
 
       <Heading as="h3" id="mcp-tools" className="text-xl font-semibold mt-8 mb-3">Tools</Heading>
-      <div className="overflow-x-auto my-3">
+      <div className="overflow-x-auto my-3 rounded-lg elevate-hover">
         <table className="w-full text-base border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
           <thead className="bg-slate-50 dark:bg-slate-900/40 text-left">
             <tr>
@@ -796,31 +1184,34 @@ function Resources() {
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [theme, toggleTheme] = useTheme();
+  const activeId = useActiveSection(allSectionIds);
 
   return (
     <div className="min-h-screen bg-[color:var(--background)] text-[color:var(--foreground)]">
-      <Topbar onMenuToggle={() => setSidebarOpen((v) => !v)} />
+      <Topbar onMenuToggle={() => setSidebarOpen((v) => !v)} theme={theme} onToggleTheme={toggleTheme} />
 
       <div className="max-w-7xl mx-auto flex">
-        <Sidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
+        <Sidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} activeId={activeId} />
 
         <main className="flex-1 min-w-0 px-4 sm:px-8 py-10 lg:pl-12">
           <article className="max-w-4xl mx-auto">
-            <Introduction />
-            <Installation />
-            <QuickStart />
-            <Prerequisites />
-            <HowItWorks />
-            <ProjectLayout />
-            <HistoryAndCheckout />
-            <DorkyIgnore />
-            <CliReference />
-            <VSCodeExtension />
-            <McpServer />
-            <EnvVars />
-            <Security />
-            <Troubleshooting />
-            <Resources />
+            <Hero />
+            <Reveal><CommunitySection /></Reveal>
+            <Reveal><Installation /></Reveal>
+            <Reveal><QuickStart /></Reveal>
+            <Reveal><Prerequisites /></Reveal>
+            <Reveal><HowItWorks /></Reveal>
+            <Reveal><ProjectLayout /></Reveal>
+            <Reveal><HistoryAndCheckout /></Reveal>
+            <Reveal><DorkyIgnore /></Reveal>
+            <Reveal><CliReference /></Reveal>
+            <Reveal><VSCodeExtension /></Reveal>
+            <Reveal><McpServer /></Reveal>
+            <Reveal><EnvVars /></Reveal>
+            <Reveal><Security /></Reveal>
+            <Reveal><Troubleshooting /></Reveal>
+            <Reveal><Resources /></Reveal>
 
             <footer className="mt-20 pt-6 border-t border-slate-200 dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400 flex items-center justify-between flex-wrap gap-2">
               <p>© 2024–2026 Dorky · ISC License</p>
