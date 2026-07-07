@@ -3,7 +3,7 @@
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
-const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync, rmSync } = require("fs");
+const { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, unlinkSync, rmSync, statSync } = require("fs");
 const { glob } = require("glob");
 const path = require("path");
 const mimeTypes = require("mime-types");
@@ -164,6 +164,7 @@ function add(files) {
     const results = [];
     files.forEach(f => {
         if (!existsSync(f)) { results.push(`File not found: ${f}`); return; }
+        if (!statSync(f).isFile()) { results.push(`Skipped (not a file): ${f}`); return; }
         const hash = md5(readFileSync(f));
         const key = toPosix(f);
         if (meta["stage-1-files"][key]?.hash === hash) { results.push(`${key} (unchanged)`); return; }
