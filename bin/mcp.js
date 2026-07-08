@@ -408,8 +408,14 @@ async function checkout(commitId) {
     if (!await checkCredentials()) return "Credentials not found. Please run init first.";
 
     const history = readHistory();
-    const entry = history.find(e => e.id === commitId || e.id.startsWith(commitId));
-    if (!entry) return `Commit not found: ${commitId}. Run log to see available commits.`;
+    const matches = history.filter(e => e.id === commitId || e.id.startsWith(commitId));
+    if (matches.length === 0) return `Commit not found: ${commitId}. Run log to see available commits.`;
+    if (matches.length > 1) {
+        const lines = [`Ambiguous commit id: ${commitId}. Matches:`];
+        matches.forEach(m => lines.push(`    ${m.id}  (${new Date(m.timestamp).toLocaleString()})`));
+        return lines.join("\n");
+    }
+    const entry = matches[0];
 
     const creds = readJson(CREDENTIALS_PATH);
     const root = path.basename(process.cwd());
