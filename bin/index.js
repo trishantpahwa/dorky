@@ -571,8 +571,14 @@ async function checkout(commitId) {
     if (!await checkCredentials()) return;
 
     const history = readHistory();
-    const entry = history.find(e => e.id === commitId || e.id.startsWith(commitId));
-    if (!entry) return console.log(chalk.red(`✖ Commit not found: ${commitId}. Run --log to see available commits.`));
+    const matches = history.filter(e => e.id === commitId || e.id.startsWith(commitId));
+    if (matches.length === 0) return console.log(chalk.red(`✖ Commit not found: ${commitId}. Run --log to see available commits.`));
+    if (matches.length > 1) {
+        console.log(chalk.red(`✖ Ambiguous commit id: ${commitId}. Matches:`));
+        matches.forEach(m => console.log(chalk.red(`    ${m.id}  (${new Date(m.timestamp).toLocaleString()})`)));
+        return;
+    }
+    const entry = matches[0];
 
     console.log(chalk.blue.bold(`\n⏪ Checking out commit ${entry.id} (${new Date(entry.timestamp).toLocaleString()}):\n`));
 

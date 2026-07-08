@@ -493,6 +493,27 @@ describe("Dorky CLI - E2E Tests", () => {
             await runCli(["--destroy"], { cwd: testDir });
         });
 
+        it("should abort --checkout with an ambiguous commit-id prefix", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const file = path.join(testDir, "notes.txt");
+            fs.writeFileSync(file, "stub");
+            await runCli(["--add", "notes.txt"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const historyPath = path.join(testDir, ".dorky", "history.json");
+            const history = JSON.parse(fs.readFileSync(historyPath, "utf-8"));
+            const entry = history[0];
+            history.push({ ...entry, id: entry.id.slice(0, 4) + "z9y8" });
+            fs.writeFileSync(historyPath, JSON.stringify(history, null, 2));
+
+            const result = await runCli(["--checkout", entry.id.slice(0, 4)], { cwd: testDir });
+            expect(result.all).toContain("Ambiguous commit id");
+            expect(result.all).toContain(entry.id);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
         it("should fail --checkout when the commit id does not exist", async () => {
             await runCli(["--init", "aws"], { cwd: testDir });
 
