@@ -7,7 +7,7 @@ const { glob } = require("glob");
 const path = require("path");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
-const EOL = require("os").type() == "Darwin" ? "\r\n" : "\n";
+const { EOL } = require("os");
 const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
@@ -227,7 +227,7 @@ async function list(type) {
         remoteFiles.forEach(f => console.log(chalk.cyan(`   ${f}`)));
     } else {
         console.log(chalk.blue.bold("\n📂 Untracked Files:"));
-        const exclusions = existsSync(".dorkyignore") ? readFileSync(".dorkyignore").toString().split(EOL).filter(Boolean) : [];
+        const exclusions = existsSync(".dorkyignore") ? readFileSync(".dorkyignore").toString().split(/\r?\n/).filter(Boolean) : [];
         const files = await glob("**/*", { dot: true, ignore: [...exclusions.map(e => `**/${e}/**`), ...exclusions, ".dorky/**", ".dorkyignore", ".git/**", "node_modules/**"] });
 
         files.forEach(f => {
