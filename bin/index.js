@@ -8,7 +8,7 @@ const path = require("path");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
 const { EOL } = require("os");
-const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
+const { GetObjectCommand, PutObjectCommand, CopyObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
 const ora = require("ora");
@@ -374,6 +374,8 @@ async function push() {
         done += 1;
         spinner.text = `${label}  ${done}/${total}`;
     };
+    /** @type {Record<string, string>} live Drive file ids from this push's uploads */
+    const driveLiveIds = {};
 
     try {
         if (creds.storage === "aws") {
@@ -399,10 +401,12 @@ async function push() {
                     for (const f of filesToUpload) {
                         const root = path.basename(process.cwd());
                         const parentId = await getFolderId(path.posix.dirname(path.posix.join(root, f.name)), drive);
-                        await drive.files.create({
+                        const created = await drive.files.create({
                             requestBody: { name: path.posix.basename(f.name), parents: [parentId] },
-                            media: { mimeType: f["mime-type"], body: createReadStream(f.name) }
+                            media: { mimeType: f["mime-type"], body: createReadStream(f.name) },
+                            fields: 'id'
                         });
+                        if (created.data.id) driveLiveIds[f.name] = created.data.id;
                         tick(`Uploaded ${f.name}`);
                     }
                 }
@@ -446,17 +450,42 @@ async function push() {
         if (creds.storage === "aws") {
             await runS3(creds, async (s3, bucket) => {
                 await Promise.all(Object.keys(commitFiles).map(async f => {
-                    const key = path.posix.join(historyPrefix, f);
-                    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
+                    const liveKey = path.posix.join(root, f);
+                    const copySource = `${bucket}/${liveKey.split("/").map(encodeURIComponent).join("/")}`;
+                    await s3.send(new CopyObjectCommand({
+                        Bucket: bucket,
+                        CopySource: copySource,
+                        Key: path.posix.join(historyPrefix, f),
+                    }));
                 }));
             });
         } else if (creds.storage === "google-drive") {
             await runDrive(async (drive) => {
                 for (const f of Object.keys(commitFiles)) {
-                    const parentId = await getFolderId(path.posix.join(root, ".dorky-history", commitId, path.posix.dirname(f)), drive);
-                    await drive.files.create({
-                        requestBody: { name: path.posix.basename(f), parents: [parentId] },
-                        media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
+                    let fileId = driveLiveIds[f];
+                    if (!fileId) {
+                        const liveParent = await getFolderId(path.posix.dirname(path.posix.join(root, f)), drive, false);
+                        if (liveParent) {
+                            const found = await drive.files.list({
+                                q: `name='${escapeDriveName(path.posix.basename(f))}' and '${liveParent}' in parents and trashed=false`,
+                                fields: 'files(id)'
+                            });
+                            fileId = found.data.files[0]?.id;
+                        }
+                    }
+                    if (!fileId) {
+                        historySpinner.warn(`Missing live file to copy for history: ${f}`);
+                        continue;
+                    }
+                    const histParent = await getFolderId(path.posix.join(root, ".dorky-history", commitId, path.posix.dirname(f)), drive);
+                    const existing = await drive.files.list({
+                        q: `name='${escapeDriveName(path.posix.basename(f))}' and '${histParent}' in parents and trashed=false`,
+                        fields: 'files(id)'
+                    });
+                    if (existing.data.files[0]) continue;
+                    await drive.files.copy({
+                        fileId,
+                        requestBody: { name: path.posix.basename(f), parents: [histParent] },
                     });
                 }
             });
