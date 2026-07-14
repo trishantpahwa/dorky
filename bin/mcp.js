@@ -13,35 +13,23 @@ const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCo
 const { authenticate } = require("@google-cloud/local-auth");
 const { google } = require("googleapis");
 
+const {
+    DORKY_DIR,
+    METADATA_PATH,
+    HISTORY_PATH,
+    readJson,
+    writeJson,
+    toPosix,
+    escapeDriveName,
+    normalizeKeys,
+    readMetadata,
+    readHistory,
+} = require("../lib/helpers");
+
 // Constants & Config
-const DORKY_DIR = ".dorky";
-const METADATA_PATH = path.join(DORKY_DIR, "metadata.json");
 const CREDENTIALS_PATH = path.join(DORKY_DIR, "credentials.json");
-const HISTORY_PATH = path.join(DORKY_DIR, "history.json");
 const GD_CREDENTIALS_PATH = path.join(__dirname, "../google-drive-credentials.json");
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
-
-// Helpers
-const readJson = (p) => existsSync(p) ? JSON.parse(readFileSync(p)) : {};
-const writeJson = (p, d) => writeFileSync(p, JSON.stringify(d, null, 2));
-const toPosix = (p) => p ? p.replace(/\\/g, '/') : p;
-const escapeDriveName = (name) => name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-const normalizeKeys = (obj) => {
-    if (!obj) return {};
-    const out = {};
-    for (const k of Object.keys(obj)) out[toPosix(k)] = obj[k];
-    return out;
-};
-const readMetadata = () => {
-    const meta = readJson(METADATA_PATH);
-    meta["stage-1-files"] = normalizeKeys(meta["stage-1-files"]);
-    meta["uploaded-files"] = normalizeKeys(meta["uploaded-files"]);
-    return meta;
-};
-const readHistory = () => {
-    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
-    return history.map(e => ({ ...e, files: normalizeKeys(e.files) }));
-};
 
 const checkDorkyProject = () => {
     if (!existsSync(DORKY_DIR) && !existsSync(".dorkyignore")) {
