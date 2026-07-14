@@ -9,9 +9,22 @@ const path = require("path");
 const mimeTypes = require("mime-types");
 const md5 = require("md5");
 const { EOL } = require("os");
-const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
-const { authenticate } = require("@google-cloud/local-auth");
-const { google } = require("googleapis");
+let _awsSdk;
+function awsSdk() {
+    if (!_awsSdk) _awsSdk = require("@aws-sdk/client-s3");
+    return _awsSdk;
+}
+let _googleApi;
+function googleApi() {
+    if (!_googleApi) {
+        _googleApi = {
+            google: require("googleapis").google,
+            authenticate: require("@google-cloud/local-auth").authenticate,
+        };
+    }
+    return _googleApi;
+}
+
 
 // Constants & Config
 const DORKY_DIR = ".dorky";
@@ -62,7 +75,7 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
         if (saved.storage === "google-drive" && saved.expiry_date) {
             const keys = readJson(GD_CREDENTIALS_PATH);
             const key = keys.installed || keys.web;
-            const client = new google.auth.OAuth2(key.client_id, key.client_secret, key.redirect_uris[0]);
+            const client = new googleApi().google.auth.OAuth2(key.client_id, key.client_secret, key.redirect_uris[0]);
             client.setCredentials(saved);
 
             if (Date.now() >= saved.expiry_date - 300000) {
@@ -78,7 +91,7 @@ async function authorizeGoogleDriveClient(forceReauth = false) {
         }
     }
 
-    const client = await authenticate({ scopes: SCOPES, keyfilePath: GD_CREDENTIALS_PATH });
+    const client = await googleApi().authenticate({ scopes: SCOPES, keyfilePath: GD_CREDENTIALS_PATH });
     if (client?.credentials && existsSync(path.dirname(CREDENTIALS_PATH))) {
         writeJson(CREDENTIALS_PATH, { storage: "google-drive", ...client.credentials });
     }
@@ -123,7 +136,7 @@ async function list(type) {
 
         if (creds.storage === "aws") {
             await runS3(creds, async (s3, bucket) => {
-                const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
+                const data = await s3.send(new (awsSdk().ListObjectsV2Command)({ Bucket: bucket, Prefix: root + "/" }));
                 if (!data.Contents?.length) { lines.push("No remote files found."); return; }
                 data.Contents.forEach(o => lines.push(`  ${o.Key.replace(root + "/", "")}`));
             });
@@ -206,7 +219,7 @@ async function checkCredentials() {
     return false;
 }
 
-const getS3 = (c) => new S3Client({
+const getS3 = (c) => new (awsSdk().S3Client)({
     credentials: { accessKeyId: c.accessKey || process.env.AWS_ACCESS_KEY, secretAccessKey: c.secretKey || process.env.AWS_SECRET_KEY },
     region: c.awsRegion || process.env.AWS_REGION
 });
@@ -241,13 +254,13 @@ async function getFolderId(pathStr, drive, create = true) {
 
 async function runDrive(fn) {
     let client = await authorizeGoogleDriveClient();
-    let drive = google.drive({ version: "v3", auth: client });
+    let drive = googleApi().google.drive({ version: "v3", auth: client });
     try { await fn(drive); }
     catch (err) {
         if (err.code === 401 || err.message?.includes("invalid_grant")) {
             if (existsSync(CREDENTIALS_PATH)) unlinkSync(CREDENTIALS_PATH);
             client = await authorizeGoogleDriveClient(true);
-            drive = google.drive({ version: "v3", auth: client });
+            drive = googleApi().google.drive({ version: "v3", auth: client });
             await fn(drive);
         } else throw err;
     }
@@ -277,14 +290,14 @@ async function push() {
             if (filesToUpload.length > 0) {
                 await Promise.all(filesToUpload.map(async f => {
                     const key = path.posix.join(path.basename(process.cwd()), f.name);
-                    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f.name) }));
+                    await s3.send(new (awsSdk().PutObjectCommand)({ Bucket: bucket, Key: key, Body: readFileSync(f.name) }));
                     results.push(`Uploaded: ${f.name}`);
                 }));
             }
             if (filesToDelete.length > 0) {
                 await Promise.all(filesToDelete.map(async f => {
                     const key = path.posix.join(path.basename(process.cwd()), f);
-                    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+                    await s3.send(new (awsSdk().DeleteObjectCommand)({ Bucket: bucket, Key: key }));
                     results.push(`Deleted remote: ${f}`);
                 }));
             }
@@ -330,7 +343,7 @@ async function push() {
         await runS3(creds, async (s3, bucket) => {
             await Promise.all(Object.keys(commitFiles).map(async f => {
                 const key = path.posix.join(historyPrefix, f);
-                await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
+                await s3.send(new (awsSdk().PutObjectCommand)({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
             }));
         });
     } else if (creds.storage === "google-drive") {
@@ -361,7 +374,7 @@ async function pull() {
         await runS3(creds, async (s3, bucket) => {
             await Promise.all(Object.keys(files).map(async f => {
                 const key = path.posix.join(path.basename(process.cwd()), f);
-                const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+                const { Body } = await s3.send(new (awsSdk().GetObjectCommand)({ Bucket: bucket, Key: key }));
                 const dir = path.dirname(f);
                 if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
                 writeFileSync(f, await Body.transformToString());
@@ -426,7 +439,7 @@ async function checkout(commitId) {
         await runS3(creds, async (s3, bucket) => {
             await Promise.all(Object.keys(entry.files).map(async f => {
                 const key = path.posix.join(historyPrefix, f);
-                const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+                const { Body } = await s3.send(new (awsSdk().GetObjectCommand)({ Bucket: bucket, Key: key }));
                 if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
                 writeFileSync(f, await Body.transformToString());
                 results.push(`Restored: ${f}`);
@@ -464,10 +477,10 @@ async function destroy() {
 
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
+            const data = await s3.send(new (awsSdk().ListObjectsV2Command)({ Bucket: bucket, Prefix: root + "/" }));
             if (data.Contents && data.Contents.length > 0) {
                 const deleteParams = { Bucket: bucket, Delete: { Objects: data.Contents.map(o => ({ Key: o.Key })) } };
-                await s3.send(new DeleteObjectsCommand(deleteParams));
+                await s3.send(new (awsSdk().DeleteObjectsCommand)(deleteParams));
                 results.push("Remote files deleted.");
             }
         });
