@@ -16,6 +16,16 @@ const boxen = require("boxen");
 const prompts = require("prompts");
 const Table = require("cli-table3");
 const gradient = require("gradient-string");
+const {
+    toPosix,
+    normalizeKeys,
+    readJson,
+    writeJson,
+    parseIgnoreList,
+    matchHistoryCommits,
+    loadMetadata,
+    loadHistory,
+} = require("../lib/helpers");
 
 // Constants & Config
 const DORKY_DIR = ".dorky";
@@ -27,27 +37,10 @@ const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
 const isTTY = Boolean(process.stdout.isTTY && process.stdin.isTTY) && process.env.NO_COLOR !== "1";
 
-// Helpers
-const readJson = (p) => existsSync(p) ? JSON.parse(readFileSync(p)) : {};
-const writeJson = (p, d) => writeFileSync(p, JSON.stringify(d, null, 2));
-const toPosix = (p) => p ? p.replace(/\\/g, '/') : p;
+// Helpers (pure bits live in lib/helpers.js for unit tests)
 const escapeDriveName = (name) => name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-const normalizeKeys = (obj) => {
-    if (!obj) return {};
-    const out = {};
-    for (const k of Object.keys(obj)) out[toPosix(k)] = obj[k];
-    return out;
-};
-const readMetadata = () => {
-    const meta = readJson(METADATA_PATH);
-    meta["stage-1-files"] = normalizeKeys(meta["stage-1-files"]);
-    meta["uploaded-files"] = normalizeKeys(meta["uploaded-files"]);
-    return meta;
-};
-const readHistory = () => {
-    const history = existsSync(HISTORY_PATH) ? JSON.parse(readFileSync(HISTORY_PATH)) : [];
-    return history.map(e => ({ ...e, files: normalizeKeys(e.files) }));
-};
+const readMetadata = () => loadMetadata(METADATA_PATH);
+const readHistory = () => loadHistory(HISTORY_PATH);
 
 // UX helpers
 const makeSpinner = (text) => {
@@ -228,7 +221,7 @@ async function list(type) {
         remoteFiles.forEach(f => console.log(chalk.cyan(`   ${f}`)));
     } else {
         console.log(chalk.blue.bold("\n📂 Untracked Files:"));
-        const exclusions = existsSync(".dorkyignore") ? readFileSync(".dorkyignore").toString().split(/\r?\n/).filter(Boolean) : [];
+        const exclusions = existsSync(".dorkyignore") ? parseIgnoreList(readFileSync(".dorkyignore").toString()) : [];
         const files = await glob("**/*", { dot: true, ignore: [...exclusions.map(e => `**/${e}/**`), ...exclusions, ".dorky/**", ".dorkyignore", ".git/**", "node_modules/**"] });
 
         files.forEach(f => {
@@ -572,7 +565,7 @@ async function checkout(commitId) {
     if (!await checkCredentials()) return;
 
     const history = readHistory();
-    const matches = history.filter(e => e.id === commitId || e.id.startsWith(commitId));
+    const matches = matchHistoryCommits(history, commitId);
     if (matches.length === 0) return console.log(chalk.red(`✖ Commit not found: ${commitId}. Run --log to see available commits.`));
     if (matches.length > 1) {
         console.log(chalk.red(`✖ Ambiguous commit id: ${commitId}. Matches:`));
