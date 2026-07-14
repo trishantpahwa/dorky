@@ -371,10 +371,26 @@ async function pull() {
         });
     } else if (creds.storage === "google-drive") {
         await runDrive(async (drive) => {
+            const root = path.basename(process.cwd());
             const fileList = Object.keys(files).map(k => ({ name: k, ...files[k] }));
             await Promise.all(fileList.map(async f => {
-                const res = await drive.files.list({ q: `name='${escapeDriveName(path.posix.basename(f.name))}' and mimeType!='application/vnd.google-apps.folder'`, fields: "files(id)" });
-                if (!res.data.files[0]) { results.push(`Missing remote file: ${f.name}`); return; }
+                const parentId = await getFolderId(
+                    path.posix.dirname(path.posix.join(root, f.name)),
+                    drive,
+                    false
+                );
+                if (!parentId) {
+                    results.push(`Missing remote folder for: ${f.name}`);
+                    return;
+                }
+                const res = await drive.files.list({
+                    q: `name='${escapeDriveName(path.posix.basename(f.name))}' and '${parentId}' in parents and trashed=false`,
+                    fields: "files(id)"
+                });
+                if (!res.data.files[0]) {
+                    results.push(`Missing remote file: ${f.name}`);
+                    return;
+                }
                 const data = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
                 if (!existsSync(path.dirname(f.name))) mkdirSync(path.dirname(f.name), { recursive: true });
                 writeFileSync(f.name, await data.data.text());
