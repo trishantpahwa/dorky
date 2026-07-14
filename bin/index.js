@@ -7,7 +7,7 @@ const { glob } = require("glob");
 const path = require("path");
 const mimeTypes = require("mime-types");
 const md5 = require('md5');
-const EOL = require("os").type() == "Darwin" ? "\r\n" : "\n";
+const { EOL } = require("os");
 const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
@@ -228,7 +228,7 @@ async function list(type) {
         remoteFiles.forEach(f => console.log(chalk.cyan(`   ${f}`)));
     } else {
         console.log(chalk.blue.bold("\n📂 Untracked Files:"));
-        const exclusions = existsSync(".dorkyignore") ? readFileSync(".dorkyignore").toString().split(EOL).filter(Boolean) : [];
+        const exclusions = existsSync(".dorkyignore") ? readFileSync(".dorkyignore").toString().split(/\r?\n/).filter(Boolean) : [];
         const files = await glob("**/*", { dot: true, ignore: [...exclusions.map(e => `**/${e}/**`), ...exclusions, ".dorky/**", ".dorkyignore", ".git/**", "node_modules/**"] });
 
         files.forEach(f => {
@@ -572,8 +572,14 @@ async function checkout(commitId) {
     if (!await checkCredentials()) return;
 
     const history = readHistory();
-    const entry = history.find(e => e.id === commitId || e.id.startsWith(commitId));
-    if (!entry) return console.log(chalk.red(`✖ Commit not found: ${commitId}. Run --log to see available commits.`));
+    const matches = history.filter(e => e.id === commitId || e.id.startsWith(commitId));
+    if (matches.length === 0) return console.log(chalk.red(`✖ Commit not found: ${commitId}. Run --log to see available commits.`));
+    if (matches.length > 1) {
+        console.log(chalk.red(`✖ Ambiguous commit id: ${commitId}. Matches:`));
+        matches.forEach(m => console.log(chalk.red(`    ${m.id}  (${new Date(m.timestamp).toLocaleString()})`)));
+        return;
+    }
+    const entry = matches[0];
 
     console.log(chalk.blue.bold(`\n⏪ Checking out commit ${entry.id} (${new Date(entry.timestamp).toLocaleString()}):\n`));
 
