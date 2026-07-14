@@ -1,5 +1,7 @@
 # dorky
 
+<div align="center">
+
 ```
      __            __
  .--|  .-----.----|  |--.--.--.
@@ -8,15 +10,27 @@
                         |_____|
 ```
 
-[`DevOps Records Keeper`](https://dorky.trishantpahwa.me/)
+**DevOps Records Keeper** — keep secrets out of git; sync them to AWS S3 or Google Drive.
+
+[![Website](https://img.shields.io/badge/site-dorky.trishantpahwa.me-0f172a)](https://dorky.trishantpahwa.me/)
+[![npm version](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
+[![npm downloads](https://img.shields.io/npm/dt/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
+[![coverage](https://img.shields.io/badge/coverage-87.93%25-blue)](https://npmjs.com/package/dorky)
+[![license](https://img.shields.io/github/license/trishantpahwa/dorky)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![GitHub stars](https://img.shields.io/github/stars/trishantpahwa/dorky?style=social)](https://github.com/trishantpahwa/dorky/stargazers)
 
 ![Logo](/logo.svg)
 
-[![dorky npm](https://img.shields.io/npm/v/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
-[![Code coverage](https://img.shields.io/badge/coverage-87.93%25-blue)](https://npmjs.com/package/dorky)
-[![Downloads](https://img.shields.io/npm/dt/dorky.svg?logo=npm)](https://npmjs.com/package/dorky)
+![Made with love in India](https://madewithlove.now.sh/in?heart=true&template=for-the-badge) · ![javascript](https://img.shields.io/badge/JavaScript-323330?style=for-the-badge&logo=javascript&logoColor=F7DF1E)
 
-![Made with love in India](https://madewithlove.now.sh/in?heart=true&template=for-the-badge) `&& ` ![javascript](https://img.shields.io/badge/JavaScript-323330?style=for-the-badge&logo=javascript&logoColor=F7DF1E)
+</div>
+
+## Quick demo
+
+![dorky flow: init → add → push → pull](./dorky-demo-flow.svg)
+
+Static walkthroughs: [AWS](./dorky-usage-aws.svg) · [Google Drive](./dorky-usage-google-drive.svg)
 
 ## Overview
 
@@ -514,7 +528,21 @@ dorky --init google-drive
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Want to help? Start here:
+
+- Read **[CONTRIBUTING.md](CONTRIBUTING.md)** (setup, CLI/MCP, tests, dual-binary rule)
+- Pick a **[good first issue](https://github.com/trishantpahwa/dorky/labels/good%20first%20issue)**
+- Follow the **[Code of Conduct](CODE_OF_CONDUCT.md)**
+
+Small docs, tests, and focused fixes are very welcome.
+
+## Support the project
+
+If dorky helps you:
+
+- **Star** the repo — it helps others find it
+- **Fork** and open a PR when you fix something
+- Share the [npm package](https://npmjs.com/package/dorky) with your team
 
 ## License
 
@@ -522,9 +550,9 @@ ISC License - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
-- 📦 [npm package](https://npmjs.com/package/dorky)
-- 🐛 [Report issues](https://github.com/trishantpahwa/dorky/issues)
-- 🌐 [Website](https://dorky.trishantpahwa.me/)
+- [npm package](https://npmjs.com/package/dorky)
+- [Report issues](https://github.com/trishantpahwa/dorky/issues)
+- [Website](https://dorky.trishantpahwa.me/)
 
 ## Roadmap
 

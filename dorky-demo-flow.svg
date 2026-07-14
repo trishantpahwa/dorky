@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="280" viewBox="0 0 720 280" role="img" aria-label="dorky demo: init, add, push, pull">
+  <rect width="720" height="280" rx="12" fill="#0f172a"/>
+  <text x="24" y="36" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">dorky · init → add → push → pull</text>
+  <rect x="16" y="52" width="688" height="212" rx="8" fill="#020617" stroke="#1e293b"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">
+    <!-- step lines fade in sequence -->
+    <text x="36" y="90" fill="#22c55e">
+      <tspan fill="#64748b">$ </tspan>dorky --init aws
+      <animate attributeName="opacity" values="0;1;1;1;1" keyTimes="0;0.15;0.4;0.7;1" dur="8s" repeatCount="indefinite"/>
+    </text>
+    <text x="36" y="118" fill="#e2e8f0">
+      <tspan fill="#64748b">  </tspan>Initialized project · provider aws
+      <animate attributeName="opacity" values="0;0;1;1;1" keyTimes="0;0.15;0.3;0.7;1" dur="8s" repeatCount="indefinite"/>
+    </text>
+    <text x="36" y="150" fill="#22c55e">
+      <tspan fill="#64748b">$ </tspan>dorky --add .env
+      <animate attributeName="opacity" values="0;0;0;1;1" keyTimes="0;0.3;0.4;0.55;1" dur="8s" repeatCount="indefinite"/>
+    </text>
+    <text x="36" y="178" fill="#e2e8f0">
+      <tspan fill="#64748b">  </tspan>Staged .env
+      <animate attributeName="opacity" values="0;0;0;0;1;1" keyTimes="0;0.4;0.5;0.55;0.65;1" dur="8s" repeatCount="indefinite"/>
+    </text>
+    <text x="36" y="210" fill="#22c55e">
+      <tspan fill="#64748b">$ </tspan>dorky --push
+      <animate attributeName="opacity" values="0;0;0;0;0;1;1" keyTimes="0;0.55;0.6;0.65;0.7;0.8;1" dur="8s" repeatCount="indefinite"/>
+    </text>
+    <text x="36" y="238" fill="#e2e8f0">
+      <tspan fill="#64748b">  </tspan>Pushed · then dorky --pull on another machine
+      <animate attributeName="opacity" values="0;0;0;0;0;0;1" keyTimes="0;0.7;0.75;0.8;0.85;0.9;1" dur="8s" repeatCount="indefinite"/>
+    </text>
+  </g>
+</svg>
