@@ -433,12 +433,7 @@ async function push() {
     filesToUpload.forEach(f => console.log(chalk.green(`✔ Uploaded: ${f.name}`)));
     filesToDelete.forEach(f => console.log(chalk.yellow(`✔ Deleted remote: ${f}`)));
 
-    meta["uploaded-files"] = { ...meta["stage-1-files"] };
-    writeJson(METADATA_PATH, meta);
-
-    history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
-    writeJson(HISTORY_PATH, history);
-
+    // Archive remote snapshot before local bookkeeping so a failed archive can be retried cleanly.
     const root = path.basename(process.cwd());
     const historyPrefix = path.posix.join(root, ".dorky-history", commitId);
     const historySpinner = makeSpinner(`Archiving commit ${commitId}...`).start();
@@ -454,6 +449,11 @@ async function push() {
             await runDrive(async (drive) => {
                 for (const f of Object.keys(commitFiles)) {
                     const parentId = await getFolderId(path.posix.join(root, ".dorky-history", commitId, path.posix.dirname(f)), drive);
+                    const existing = await drive.files.list({
+                        q: `name='${escapeDriveName(path.posix.basename(f))}' and '${parentId}' in parents and trashed=false`,
+                        fields: 'files(id)'
+                    });
+                    if (existing.data.files[0]) continue; // retry-safe: skip if already archived
                     await drive.files.create({
                         requestBody: { name: path.posix.basename(f), parents: [parentId] },
                         media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
@@ -466,6 +466,13 @@ async function push() {
         historySpinner.fail(`Failed to archive commit ${commitId}`);
         throw err;
     }
+
+    meta["uploaded-files"] = { ...meta["stage-1-files"] };
+    writeJson(METADATA_PATH, meta);
+
+    history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
+    writeJson(HISTORY_PATH, history);
+
     console.log(chalk.cyan(`ℹ History commit saved: ${commitId}`));
 }
 
