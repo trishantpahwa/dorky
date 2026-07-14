@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question
+    url: https://github.com/trishantpahwa/dorky/issues/new
+    about: Ask a question with a blank issue (no template).

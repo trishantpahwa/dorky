@@ -1,61 +1,63 @@
 # Contributing to dorky
 
-First off, thank you for considering contributing to dorky! It's people like you that make dorky such a great tool for the DevOps community.
+Thank you for helping improve dorky — a git-style CLI that keeps secrets out of version control by syncing them to AWS S3 or Google Drive.
 
 ## Code of Conduct
 
-By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+By participating, you agree to our [Code of Conduct](CODE_OF_CONDUCT.md). Report concerns via [repo issues](https://github.com/trishantpahwa/dorky/issues).
 
-## How Can I Contribute?
+## First-time contributors
 
-### Reporting Bugs
+1. Browse [good first issues](https://github.com/trishantpahwa/dorky/labels/good%20first%20issue) and [help wanted](https://github.com/trishantpahwa/dorky/labels/help%20wanted).
+2. Comment on an issue if you want to claim it (the repo may auto-respond / assign).
+3. Fork → branch → PR with `Closes #…` in the description.
 
-- **Check if the bug has already been reported.** Search the [issues list](https://github.com/trishantpahwa/dorky/issues).
-- **Use the Bug Report template.** provide as much information as possible.
-- **Provide a reproducible example.** This helps us fix the issue faster.
+## Development setup
 
-### Suggesting Features
-
-- **Check if the feature has already been requested.**
-- **Explain why the feature would be useful.**
-- **Be as detailed as possible.**
-
-### Your First Code Contribution
-
-Unsure where to begin? Look for issues labeled `good first issue` or `help wanted`. Our [automated setup](.github/workflows/issue-auto-respond.yml) will even assign it to you automatically if you comment on it!
-
-1. **Fork the repository.**
-2. **Clone your fork.**
-3. **Create a new branch** for your fix or feature.
-4. **Make your changes.**
-5. **Run tests** using `npm test`.
-6. **Commit your changes.** We follow simple commit messages.
-7. **Push to your fork.**
-8. **Submit a Pull Request.**
-
-## Development Setup
+**Node.js:** use a current LTS (18+ recommended).
 
 ```bash
-# Clone the repository
-git clone https://github.com/trishantpahwa/dorky.git
+git clone https://github.com/<you>/dorky.git
 cd dorky
-
-# Install dependencies
 npm install
-
-# Run the CLI locally
-node bin/index.js --help
-
-# Run tests
-npm test
 ```
 
-## Pull Request Process
+### Run locally
 
-1. Ensure any install or build dependencies are removed before the end of the layer when doing a build.
-2. Update the README.md with details of changes to the interface, this includes new environment variables, exposed ports, useful file locations and container parameters.
-3. You may merge the Pull Request in once you have the sign-off of two other developers, or if you do not have permission to do that, you may request the second reviewer to merge it for you.
+```bash
+# CLI
+node bin/index.js --help
 
-## Need Help?
+# MCP server
+node bin/mcp.js
+```
 
-Feel free to open an issue or reach out to the maintainers!
+### Tests
+
+```bash
+npm test              # full suite (includes e2e; can be slow)
+npm run test:unit     # fast unit tests under tests/unit/
+npm run test:e2e      # e2e only
+npm run test:coverage # coverage report
+```
+
+## Golden rule: keep binaries in sync
+
+Until shared provider code is fully extracted (`lib/`), **behavior that lives in both** `bin/index.js` and `bin/mcp.js` should be updated in **both** files (or moved into `lib/` and required from both).
+
+Examples: Google Drive query helpers, cloud SDK loading, shared path/metadata helpers.
+
+## Pull requests
+
+- Prefer small, focused PRs that match one issue.
+- Use the PR template checklist.
+- Do not commit secrets, credentials, or real `.env` files.
+- For user-facing CLI changes, update the README.
+
+## Reporting bugs / features
+
+Use the issue templates under **New issue** (bug report includes dorky version, provider, OS, and repro steps).
+
+## Need help?
+
+Open an issue — maintainers and other contributors will help where they can.

@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a dorky bug with enough detail to reproduce
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve dorky. Please fill in what you can.
+  - type: input
+    id: version
+    attributes:
+      label: dorky version
+      description: Output of `dorky --version` or package version
+      placeholder: "4.2.x"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Storage provider
+      options:
+        - aws
+        - google-drive
+        - unknown / not sure
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "Windows 11 / macOS 14 / Ubuntu 22.04"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands and folder setup
+      placeholder: |
+        1. dorky --init aws
+        2. dorky --add .env
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error text if any (no secrets)
+    validations:
+      required: true
