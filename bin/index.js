@@ -282,10 +282,14 @@ async function checkCredentials() {
         });
         return true;
     }
-    try {
-        const client = await authorizeGoogleDriveClient(true);
-        if (client) return true;
-    } catch { }
+    // Only start Drive OAuth when a keyfile is present — never surprise AWS users with a browser popup.
+    if (existsSync(GD_CREDENTIALS_PATH)) {
+        try {
+            console.log(chalk.yellow("ℹ No credentials found — starting Google Drive authorization…"));
+            const client = await authorizeGoogleDriveClient(true);
+            if (client) return true;
+        } catch { }
+    }
     console.log(chalk.red("✖ Credentials not found. Please run --init."));
     return false;
 }

@@ -77,6 +77,43 @@ describe("Dorky CLI - E2E Tests", () => {
             });
             expect(result.all).toContain("Missing AWS environment variables");
         });
+
+        it("should fail fast on remote list when credentials are missing (no surprise OAuth)", async () => {
+            // Minimal project without .dorky/credentials.json
+            fs.mkdirSync(path.join(testDir, ".dorky"));
+            fs.writeFileSync(path.join(testDir, ".dorkyignore"), "");
+            fs.writeFileSync(
+                path.join(testDir, ".dorky", "metadata.json"),
+                JSON.stringify({ "stage-1-files": {}, "uploaded-files": {} })
+            );
+
+            // Temporarily hide package Drive keyfile so checkCredentials cannot open OAuth.
+            const gdKey = path.resolve(__dirname, "../../google-drive-credentials.json");
+            const gdBak = gdKey + ".bak-e2e-" + process.pid;
+            let movedKey = false;
+            if (fs.existsSync(gdKey)) {
+                fs.renameSync(gdKey, gdBak);
+                movedKey = true;
+            }
+
+            try {
+                const result = await runCli(["--list", "remote"], {
+                    cwd: testDir,
+                    env: {
+                        AWS_ACCESS_KEY: "",
+                        AWS_SECRET_KEY: "",
+                        AWS_REGION: "",
+                        BUCKET_NAME: "",
+                    },
+                });
+                expect(result.all).toContain("Credentials not found");
+                expect(result.all).toContain("init");
+            } finally {
+                if (movedKey && fs.existsSync(gdBak)) {
+                    fs.renameSync(gdBak, gdKey);
+                }
+            }
+        });
     })
 
     describe("Complete Google Drive workdlow", () => {
