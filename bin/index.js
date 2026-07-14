@@ -31,6 +31,7 @@ const isTTY = Boolean(process.stdout.isTTY && process.stdin.isTTY) && process.en
 const readJson = (p) => existsSync(p) ? JSON.parse(readFileSync(p)) : {};
 const writeJson = (p, d) => writeFileSync(p, JSON.stringify(d, null, 2));
 const toPosix = (p) => p ? p.replace(/\\/g, '/') : p;
+const escapeDriveName = (name) => name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 const normalizeKeys = (obj) => {
     if (!obj) return {};
     const out = {};
@@ -203,7 +204,7 @@ async function list(type) {
                 });
             } else {
                 await runDrive(async (drive) => {
-                    const q = `name='${root}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
+                    const q = `name='${escapeDriveName(root)}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
                     const { data: { files: [folder] } } = await drive.files.list({ q, fields: 'files(id)' });
                     if (!folder) return;
                     const walk = async (pid, p = '') => {
@@ -322,7 +323,7 @@ async function getFolderId(pathStr, drive, create = true) {
     if (!pathStr || pathStr === '.') return parentId;
     for (const folder of pathStr.split("/")) {
         if (!folder) continue;
-        const res = await drive.files.list({ q: `name='${folder}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`, fields: 'files(id)' });
+        const res = await drive.files.list({ q: `name='${escapeDriveName(folder)}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`, fields: 'files(id)' });
         if (res.data.files[0]) parentId = res.data.files[0].id;
         else if (create) parentId = (await drive.files.create({ requestBody: { name: folder, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }, fields: 'id' })).data.id;
         else return null;
@@ -411,7 +412,7 @@ async function push() {
                         const parentId = await getFolderId(path.posix.dirname(path.posix.join(root, f)), drive, false);
                         if (parentId) {
                             const res = await drive.files.list({
-                                q: `name='${path.posix.basename(f)}' and '${parentId}' in parents and trashed=false`,
+                                q: `name='${escapeDriveName(path.posix.basename(f))}' and '${parentId}' in parents and trashed=false`,
                                 fields: 'files(id)'
                             });
                             if (res.data.files[0]) {
@@ -501,7 +502,7 @@ async function pull() {
             await runDrive(async (drive) => {
                 const fileList = Object.keys(files).map(k => ({ name: k, ...files[k] }));
                 await Promise.all(fileList.map(async f => {
-                    const res = await drive.files.list({ q: `name='${path.posix.basename(f.name)}' and mimeType!='application/vnd.google-apps.folder'`, fields: 'files(id)' });
+                    const res = await drive.files.list({ q: `name='${escapeDriveName(path.posix.basename(f.name))}' and mimeType!='application/vnd.google-apps.folder'`, fields: 'files(id)' });
                     if (!res.data.files[0]) {
                         spinner.warn(`Missing remote file: ${f.name}`);
                         return;
@@ -609,7 +610,7 @@ async function checkout(commitId) {
                     const parentId = await getFolderId(path.posix.join(root, ".dorky-history", entry.id, path.posix.dirname(f)), drive, false);
                     if (!parentId) { spinner.warn(`Remote history folder missing for: ${f}`); continue; }
                     const res = await drive.files.list({
-                        q: `name='${path.posix.basename(f)}' and '${parentId}' in parents and trashed=false`,
+                        q: `name='${escapeDriveName(path.posix.basename(f))}' and '${parentId}' in parents and trashed=false`,
                         fields: 'files(id)'
                     });
                     if (!res.data.files[0]) { spinner.warn(`Missing remote history file: ${f}`); continue; }
@@ -670,7 +671,7 @@ async function destroy() {
             });
         } else if (creds.storage === "google-drive") {
             await runDrive(async (drive) => {
-                const q = `name='${root}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
+                const q = `name='${escapeDriveName(root)}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
                 const { data: { files: [folder] } } = await drive.files.list({ q, fields: 'files(id)' });
                 if (folder) {
                     await drive.files.delete({ fileId: folder.id });
