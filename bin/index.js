@@ -492,7 +492,7 @@ async function pull() {
                     const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
                     const dir = path.dirname(f);
                     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-                    writeFileSync(f, await Body.transformToString());
+                    writeFileSync(f, Buffer.from(await Body.transformToByteArray()));
                     pulled.push(f);
                     done += 1;
                     spinner.text = `Downloading... ${done}/${total}`;
@@ -507,9 +507,12 @@ async function pull() {
                         spinner.warn(`Missing remote file: ${f.name}`);
                         return;
                     }
-                    const data = await drive.files.get({ fileId: res.data.files[0].id, alt: 'media' });
+                    const data = await drive.files.get(
+                        { fileId: res.data.files[0].id, alt: 'media' },
+                        { responseType: 'arraybuffer' }
+                    );
                     if (!existsSync(path.dirname(f.name))) mkdirSync(path.dirname(f.name), { recursive: true });
-                    writeFileSync(f.name, await data.data.text());
+                    writeFileSync(f.name, Buffer.from(data.data));
                     pulled.push(f.name);
                     done += 1;
                     spinner.text = `Downloading... ${done}/${total}`;
@@ -598,7 +601,7 @@ async function checkout(commitId) {
                     const key = path.posix.join(historyPrefix, f);
                     const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
                     if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
-                    writeFileSync(f, await Body.transformToString());
+                    writeFileSync(f, Buffer.from(await Body.transformToByteArray()));
                     restored.push(f);
                     done += 1;
                     spinner.text = `Restoring... ${done}/${total}`;
@@ -614,9 +617,12 @@ async function checkout(commitId) {
                         fields: 'files(id)'
                     });
                     if (!res.data.files[0]) { spinner.warn(`Missing remote history file: ${f}`); continue; }
-                    const data = await drive.files.get({ fileId: res.data.files[0].id, alt: 'media' });
+                    const data = await drive.files.get(
+                        { fileId: res.data.files[0].id, alt: 'media' },
+                        { responseType: 'arraybuffer' }
+                    );
                     if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
-                    writeFileSync(f, await data.data.text());
+                    writeFileSync(f, Buffer.from(data.data));
                     restored.push(f);
                     done += 1;
                     spinner.text = `Restoring... ${done}/${total}`;

@@ -132,6 +132,34 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
+        it("should round-trip a binary file byte-identically on Google Drive pull", async () => {
+            let result = await runCli(["--init", "google-drive"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            const binName = "all-bytes.bin";
+            const binFile = path.join(testDir, binName);
+            const original = Buffer.alloc(256);
+            for (let i = 0; i < 256; i++) original[i] = i;
+            fs.writeFileSync(binFile, original);
+
+            result = await runCli(["--add", binName], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            result = await runCli(["--push"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            fs.unlinkSync(binFile);
+            expect(fs.existsSync(binFile)).toBe(false);
+
+            result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(fs.existsSync(binFile)).toBe(true);
+            const restored = fs.readFileSync(binFile);
+            expect(restored.equals(original)).toBe(true);
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+        });
+
         it("should remove file from remote when removed via rm and pushed", async () => {
             // Initialize
             await runCli(["--init", "google-drive"], { cwd: testDir });
@@ -219,6 +247,34 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(result.all).toContain("Project destroyed locally");
             expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
             expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
+        });
+
+        it("should round-trip a binary file byte-identically on AWS pull", async () => {
+            let result = await runCli(["--init", "aws"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            const binName = "all-bytes.bin";
+            const binFile = path.join(testDir, binName);
+            const original = Buffer.alloc(256);
+            for (let i = 0; i < 256; i++) original[i] = i;
+            fs.writeFileSync(binFile, original);
+
+            result = await runCli(["--add", binName], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            result = await runCli(["--push"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            fs.unlinkSync(binFile);
+            expect(fs.existsSync(binFile)).toBe(false);
+
+            result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(fs.existsSync(binFile)).toBe(true);
+            const restored = fs.readFileSync(binFile);
+            expect(restored.equals(original)).toBe(true);
+
+            result = await runCli(["--destroy"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
         });
 
         it("should remove file from remote when removed via rm and pushed", async () => {
