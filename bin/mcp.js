@@ -10,6 +10,8 @@ const mimeTypes = require("mime-types");
 const md5 = require("md5");
 const { EOL } = require("os");
 const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand, S3Client } = require("@aws-sdk/client-s3");
+const { listAllObjectKeys, deleteAllObjectKeys } = require("../lib/s3-pagination");
+
 const { authenticate } = require("@google-cloud/local-auth");
 const { google } = require("googleapis");
 
@@ -124,9 +126,9 @@ async function list(type) {
 
         if (creds.storage === "aws") {
             await runS3(creds, async (s3, bucket) => {
-                const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
-                if (!data.Contents?.length) { lines.push("No remote files found."); return; }
-                data.Contents.forEach(o => lines.push(`  ${o.Key.replace(root + "/", "")}`));
+                const keys = await listAllObjectKeys(s3, ListObjectsV2Command, bucket, root + "/");
+                if (!keys.length) { lines.push("No remote files found."); return; }
+                keys.forEach(k => lines.push(`  ${k.replace(root + "/", "")}`));
             });
         } else {
             await runDrive(async (drive) => {
@@ -465,10 +467,9 @@ async function destroy() {
 
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
-            if (data.Contents && data.Contents.length > 0) {
-                const deleteParams = { Bucket: bucket, Delete: { Objects: data.Contents.map(o => ({ Key: o.Key })) } };
-                await s3.send(new DeleteObjectsCommand(deleteParams));
+            const keys = await listAllObjectKeys(s3, ListObjectsV2Command, bucket, root + "/");
+            if (keys.length > 0) {
+                await deleteAllObjectKeys(s3, DeleteObjectsCommand, bucket, keys);
                 results.push("Remote files deleted.");
             }
         });
