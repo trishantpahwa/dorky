@@ -9,6 +9,7 @@ import {
   readHistory,
   parseDorkyIgnore,
   matchCheckoutEntries,
+  escapeDriveName,
   DORKY_DIR,
   METADATA_PATH,
   HISTORY_PATH,
@@ -51,6 +52,14 @@ describe("helpers", () => {
     });
     it("drops empty lines", () => {
       expect(parseDorkyIgnore("a\n\n\nb\n")).toEqual(["a", "b"]);
+    });
+  });
+
+  describe("escapeDriveName", () => {
+    it("escapes apostrophes and backslashes for Drive queries", () => {
+      expect(escapeDriveName("bob's-app")).toBe("bob\\'s-app");
+      expect(escapeDriveName("a\\b")).toBe("a\\\\b");
+      expect(escapeDriveName("normal")).toBe("normal");
     });
   });
 
