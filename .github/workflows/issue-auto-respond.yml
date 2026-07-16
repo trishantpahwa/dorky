@@ -111,7 +111,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue.number,
-                body: `${fillTemplate(msg.greeting, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n\n${fillTemplate(msg.body, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n\n${fillTemplate(msg.nextSteps.title, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n${nextSteps}\n\n${fillTemplate(msg.resources.title, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n${resources}\n\n${fillTemplate(msg.footer, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n\n${fillTemplate(msg.encouragement, { commenter: assignee, issueNumber: issue.number, repoUrl })}`
+                body: `${fillTemplate(msg.greeting, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n\n${fillTemplate(msg.body, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n\n${fillTemplate(msg.deadline, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n\n${fillTemplate(msg.nextSteps.title, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n${nextSteps}\n\n${fillTemplate(msg.resources.title, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n${resources}\n\n${fillTemplate(msg.footer, { commenter: assignee, issueNumber: issue.number, repoUrl })}\n\n${fillTemplate(msg.encouragement, { commenter: assignee, issueNumber: issue.number, repoUrl })}`
               });
               await reactToComment(reply.data.id, pickRandomReactions(3));
 

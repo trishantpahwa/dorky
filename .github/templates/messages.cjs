@@ -18,6 +18,8 @@ module.exports = {
     assigned: {
       greeting: 'Hey @{commenter}! 👋',
       body: "Thanks for claiming this issue! You've been assigned. 🎉",
+      deadline:
+        "⏰ **Heads up:** you have **24 hours** from now to complete this issue (PR opened and merged). If it isn't done in time, you'll be automatically unassigned, any open PR you have for it will be closed, and the issue will be reopened for someone else to claim.",
       nextSteps: {
         title: '**Next steps:**',
         items: [
@@ -38,6 +40,16 @@ module.exports = {
       footer: "Need help? Just comment here and we'll assist you!",
       encouragement: 'Happy hacking! 🍀',
     },
+  },
+
+  // =============================================================================
+  // ISSUE UNASSIGN STALE (issue-unassign-stale.yml)
+  // =============================================================================
+  issueUnassignStale: {
+    body:
+      'This issue was assigned to @{assignee} more than 24 hours ago and the work was not completed in time, so they have been automatically unassigned.',
+    prClosedNote: 'Their open pull request(s) linked to this issue ({prList}) have also been closed.',
+    footer: "This issue is up for grabs again — comment below if you'd like to claim it! 🙌",
   },
 
   // =============================================================================

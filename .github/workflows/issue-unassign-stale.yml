@@ -1,0 +1,137 @@
+name: Unassign Stale Issue Assignees
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  unassign-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Unassign issues past the 24h deadline
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.AUTOMATION_PR_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const DEADLINE_MS = 24 * 60 * 60 * 1000;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const path = '.github/templates/messages.cjs';
+            const { data: file } = await github.rest.repos.getContent({
+              owner, repo, path, ref: context.sha
+            });
+            const content = Buffer.from(file.content, 'base64').toString('utf8');
+            const module = { exports: {} };
+            const vm = require('vm');
+            vm.runInNewContext(content, { module, exports: module.exports });
+            const msg = module.exports.issueUnassignStale;
+
+            function fillTemplate(str, vars) {
+              return Object.entries(vars).reduce((acc, [key, value]) => {
+                return acc
+                  .replaceAll(`{${key}}`, String(value))
+                  .replaceAll(`@{${key}}`, `@${value}`)
+                  .replaceAll(`#{${key}}`, `#${value}`);
+              }, str);
+            }
+
+            const repoUrl = `https://github.com/${owner}/${repo}`;
+            const now = Date.now();
+
+            const assignedIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', assignee: '*', per_page: 100
+            });
+
+            for (const issue of assignedIssues) {
+              if (issue.pull_request) continue; // skip PRs, only care about issues
+              if (!issue.assignees || issue.assignees.length === 0) continue;
+
+              let timeline;
+              try {
+                timeline = await github.paginate(github.rest.issues.listEventsForTimeline, {
+                  owner, repo, issue_number: issue.number, per_page: 100
+                });
+              } catch (e) {
+                console.log(`Failed to load timeline for #${issue.number}: ${e.message}`);
+                continue;
+              }
+
+              for (const assignee of issue.assignees) {
+                const assignedEvents = timeline.filter(
+                  (e) => e.event === 'assigned' && e.assignee?.login === assignee.login
+                );
+                if (assignedEvents.length === 0) {
+                  console.log(`No 'assigned' event found for @${assignee.login} on #${issue.number}; skipping.`);
+                  continue;
+                }
+
+                const lastAssigned = assignedEvents[assignedEvents.length - 1];
+                const assignedAt = new Date(lastAssigned.created_at).getTime();
+                if (now - assignedAt < DEADLINE_MS) continue;
+
+                console.log(`Issue #${issue.number}: @${assignee.login} assigned ${Math.round((now - assignedAt) / 3600000)}h ago — deadline passed.`);
+
+                // Find this assignee's open PRs cross-referenced against this issue.
+                const crossRefs = timeline.filter(
+                  (e) => e.event === 'cross-referenced' && e.source?.issue?.pull_request
+                );
+                const prsToClose = [];
+                for (const ref of crossRefs) {
+                  const prIssue = ref.source.issue;
+                  const sameRepo = !prIssue.repository || prIssue.repository.full_name === `${owner}/${repo}`;
+                  if (sameRepo && prIssue.state === 'open' && prIssue.user?.login === assignee.login) {
+                    prsToClose.push(prIssue.number);
+                  }
+                }
+
+                for (const prNumber of [...new Set(prsToClose)]) {
+                  try {
+                    await github.rest.pulls.update({ owner, repo, pull_number: prNumber, state: 'closed' });
+                    await github.rest.issues.createComment({
+                      owner, repo, issue_number: prNumber,
+                      body: `Closing automatically: the linked issue #${issue.number} assignment expired after 24 hours without the task being completed.`
+                    });
+                    console.log(`Closed PR #${prNumber} for @${assignee.login}.`);
+                  } catch (e) {
+                    console.log(`Failed to close PR #${prNumber}: ${e.message}`);
+                  }
+                }
+
+                try {
+                  await github.rest.issues.removeAssignees({
+                    owner, repo, issue_number: issue.number, assignees: [assignee.login]
+                  });
+                } catch (e) {
+                  console.log(`Failed to unassign @${assignee.login} from #${issue.number}: ${e.message}`);
+                  continue;
+                }
+
+                const prList = prsToClose.length > 0
+                  ? [...new Set(prsToClose)].map((n) => `#${n}`).join(', ')
+                  : null;
+
+                const bodyParts = [
+                  fillTemplate(msg.body, { assignee: assignee.login, issueNumber: issue.number, repoUrl })
+                ];
+                if (prList) {
+                  bodyParts.push(fillTemplate(msg.prClosedNote, { assignee: assignee.login, prList, issueNumber: issue.number, repoUrl }));
+                }
+                bodyParts.push(fillTemplate(msg.footer, { assignee: assignee.login, issueNumber: issue.number, repoUrl }));
+
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issue.number,
+                  body: bodyParts.join('\n\n')
+                });
+
+                console.log(`Unassigned @${assignee.login} from issue #${issue.number}.`);
+              }
+            }
