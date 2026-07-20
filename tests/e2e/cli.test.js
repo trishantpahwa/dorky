@@ -6,6 +6,10 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// A 256-byte fixture containing every possible byte value, including
+// invalid UTF-8 sequences that a string round-trip would mangle.
+const binaryFixture = () => Buffer.from(Array.from({ length: 256 }, (_, i) => i));
+
 describe("Dorky CLI - E2E Tests", () => {
     let testDir;
 
@@ -168,6 +172,28 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
         });
 
+        it("should round-trip a binary file byte-identically via --pull", async () => {
+            await runCli(["--init", "google-drive"], { cwd: testDir });
+
+            const binFile = path.join(testDir, "secret.bin");
+            const original = binaryFixture();
+            fs.writeFileSync(binFile, original);
+
+            await runCli(["--add", "secret.bin"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            fs.unlinkSync(binFile);
+            expect(fs.existsSync(binFile)).toBe(false);
+
+            const result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            expect(fs.existsSync(binFile)).toBe(true);
+            expect(fs.readFileSync(binFile).equals(original)).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
     });
 
     describe("Complete AWS S3 workflow", () => {
@@ -255,6 +281,28 @@ describe("Dorky CLI - E2E Tests", () => {
             expect(result.all).toContain("Project destroyed locally");
             expect(fs.existsSync(path.join(testDir, ".dorky"))).toBe(false);
             expect(fs.existsSync(path.join(testDir, ".dorkyignore"))).toBe(false);
+        });
+
+        it("should round-trip a binary file byte-identically via --pull", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const binFile = path.join(testDir, "secret.bin");
+            const original = binaryFixture();
+            fs.writeFileSync(binFile, original);
+
+            await runCli(["--add", "secret.bin"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            fs.unlinkSync(binFile);
+            expect(fs.existsSync(binFile)).toBe(false);
+
+            const result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            expect(fs.existsSync(binFile)).toBe(true);
+            expect(fs.readFileSync(binFile).equals(original)).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
         });
 
     });
@@ -528,55 +576,7 @@ describe("Dorky CLI - E2E Tests", () => {
             await runCli(["--destroy"], { cwd: testDir });
         });
 
-        // A 256-byte fixture containing every possible byte value, including
-        // invalid UTF-8 sequences that a string round-trip would mangle.
-        const binaryFixture = () => Buffer.from(Array.from({ length: 256 }, (_, i) => i));
-
-        it("should round-trip a binary file byte-identically via AWS S3 --pull", async () => {
-            await runCli(["--init", "aws"], { cwd: testDir });
-
-            const binFile = path.join(testDir, "secret.bin");
-            const original = binaryFixture();
-            fs.writeFileSync(binFile, original);
-
-            await runCli(["--add", "secret.bin"], { cwd: testDir });
-            await runCli(["--push"], { cwd: testDir });
-
-            fs.unlinkSync(binFile);
-            expect(fs.existsSync(binFile)).toBe(false);
-
-            const result = await runCli(["--pull"], { cwd: testDir });
-            expect(result.exitCode).toBe(0);
-
-            expect(fs.existsSync(binFile)).toBe(true);
-            expect(fs.readFileSync(binFile).equals(original)).toBe(true);
-
-            await runCli(["--destroy"], { cwd: testDir });
-        });
-
-        it("should round-trip a binary file byte-identically via Google Drive --pull", async () => {
-            await runCli(["--init", "google-drive"], { cwd: testDir });
-
-            const binFile = path.join(testDir, "secret.bin");
-            const original = binaryFixture();
-            fs.writeFileSync(binFile, original);
-
-            await runCli(["--add", "secret.bin"], { cwd: testDir });
-            await runCli(["--push"], { cwd: testDir });
-
-            fs.unlinkSync(binFile);
-            expect(fs.existsSync(binFile)).toBe(false);
-
-            const result = await runCli(["--pull"], { cwd: testDir });
-            expect(result.exitCode).toBe(0);
-
-            expect(fs.existsSync(binFile)).toBe(true);
-            expect(fs.readFileSync(binFile).equals(original)).toBe(true);
-
-            await runCli(["--destroy"], { cwd: testDir });
-        });
-
-        it("should round-trip a binary file byte-identically via --checkout", async () => {
+        it("should restore a binary file byte-identically via --checkout", async () => {
             await runCli(["--init", "aws"], { cwd: testDir });
 
             const binFile = path.join(testDir, "secret.bin");
