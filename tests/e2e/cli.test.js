@@ -527,5 +527,80 @@ describe("Dorky CLI - E2E Tests", () => {
 
             await runCli(["--destroy"], { cwd: testDir });
         });
+
+        // A 256-byte fixture containing every possible byte value, including
+        // invalid UTF-8 sequences that a string round-trip would mangle.
+        const binaryFixture = () => Buffer.from(Array.from({ length: 256 }, (_, i) => i));
+
+        it("should round-trip a binary file byte-identically via AWS S3 --pull", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const binFile = path.join(testDir, "secret.bin");
+            const original = binaryFixture();
+            fs.writeFileSync(binFile, original);
+
+            await runCli(["--add", "secret.bin"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            fs.unlinkSync(binFile);
+            expect(fs.existsSync(binFile)).toBe(false);
+
+            const result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            expect(fs.existsSync(binFile)).toBe(true);
+            expect(fs.readFileSync(binFile).equals(original)).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should round-trip a binary file byte-identically via Google Drive --pull", async () => {
+            await runCli(["--init", "google-drive"], { cwd: testDir });
+
+            const binFile = path.join(testDir, "secret.bin");
+            const original = binaryFixture();
+            fs.writeFileSync(binFile, original);
+
+            await runCli(["--add", "secret.bin"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            fs.unlinkSync(binFile);
+            expect(fs.existsSync(binFile)).toBe(false);
+
+            const result = await runCli(["--pull"], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+
+            expect(fs.existsSync(binFile)).toBe(true);
+            expect(fs.readFileSync(binFile).equals(original)).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
+
+        it("should round-trip a binary file byte-identically via --checkout", async () => {
+            await runCli(["--init", "aws"], { cwd: testDir });
+
+            const binFile = path.join(testDir, "secret.bin");
+            const original = binaryFixture();
+            fs.writeFileSync(binFile, original);
+
+            await runCli(["--add", "secret.bin"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const historyPath = path.join(testDir, ".dorky", "history.json");
+            const history = JSON.parse(fs.readFileSync(historyPath, "utf-8"));
+            const firstCommit = history[0].id;
+
+            // Overwrite locally with different content and push again so the
+            // first commit's history copy is what --checkout restores from.
+            fs.writeFileSync(binFile, "corrupted");
+            await runCli(["--add", "secret.bin"], { cwd: testDir });
+            await runCli(["--push"], { cwd: testDir });
+
+            const result = await runCli(["--checkout", firstCommit], { cwd: testDir });
+            expect(result.exitCode).toBe(0);
+            expect(fs.readFileSync(binFile).equals(original)).toBe(true);
+
+            await runCli(["--destroy"], { cwd: testDir });
+        });
     });
 });

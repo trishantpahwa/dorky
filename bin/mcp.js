@@ -372,7 +372,7 @@ async function pull() {
                 const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
                 const dir = path.dirname(f);
                 if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-                writeFileSync(f, await Body.transformToString());
+                writeFileSync(f, Buffer.from(await Body.transformToByteArray()));
                 results.push(`Downloaded: ${f}`);
             }));
         });
@@ -382,9 +382,9 @@ async function pull() {
             await Promise.all(fileList.map(async f => {
                 const res = await drive.files.list({ q: `name='${escapeDriveName(path.posix.basename(f.name))}' and mimeType!='application/vnd.google-apps.folder'`, fields: "files(id)" });
                 if (!res.data.files[0]) { results.push(`Missing remote file: ${f.name}`); return; }
-                const data = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
+                const data = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" }, { responseType: "arraybuffer" });
                 if (!existsSync(path.dirname(f.name))) mkdirSync(path.dirname(f.name), { recursive: true });
-                writeFileSync(f.name, await data.data.text());
+                writeFileSync(f.name, Buffer.from(data.data));
                 results.push(`Downloaded: ${f.name}`);
             }));
         });
@@ -437,7 +437,7 @@ async function checkout(commitId) {
                 const key = path.posix.join(historyPrefix, f);
                 const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
                 if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
-                writeFileSync(f, await Body.transformToString());
+                writeFileSync(f, Buffer.from(await Body.transformToByteArray()));
                 results.push(`Restored: ${f}`);
             }));
         });
@@ -448,9 +448,9 @@ async function checkout(commitId) {
                 if (!parentId) { results.push(`Remote history folder missing for: ${f}`); continue; }
                 const res = await drive.files.list({ q: `name='${escapeDriveName(path.posix.basename(f))}' and '${parentId}' in parents and trashed=false`, fields: "files(id)" });
                 if (!res.data.files[0]) { results.push(`Missing remote history file: ${f}`); continue; }
-                const data = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" });
+                const data = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" }, { responseType: "arraybuffer" });
                 if (!existsSync(path.dirname(f))) mkdirSync(path.dirname(f), { recursive: true });
-                writeFileSync(f, await data.data.text());
+                writeFileSync(f, Buffer.from(data.data));
                 results.push(`Restored: ${f}`);
             }
         });
