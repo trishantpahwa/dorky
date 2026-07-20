@@ -33,6 +33,8 @@ export default defineConfig({
         // Disable threads for better CLI subprocess handling
         threads: false,
 
+        fileParallelism: false,
+
         // Bail on first test failure (optional, can be removed)
         bail: 0,
     },
