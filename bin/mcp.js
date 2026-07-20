@@ -123,7 +123,7 @@ async function list(type) {
 
         if (creds.storage === "aws") {
             await runS3(creds, async (s3, bucket) => {
-                const { ListObjectsV2Command } = getS3Sdk();
+                const { ListObjectsV2Command } = require("@aws-sdk/client-s3");
                 const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
                 if (!data.Contents?.length) { lines.push("No remote files found."); return; }
                 data.Contents.forEach(o => lines.push(`  ${o.Key.replace(root + "/", "")}`));
@@ -207,12 +207,8 @@ async function checkCredentials() {
     return false;
 }
 
-function getS3Sdk() {
-    return require("@aws-sdk/client-s3");
-}
-
 const getS3 = (c) => {
-    const { S3Client } = getS3Sdk();
+    const { S3Client } = require("@aws-sdk/client-s3");
     return new S3Client({
         credentials: { accessKeyId: c.accessKey || process.env.AWS_ACCESS_KEY, secretAccessKey: c.secretKey || process.env.AWS_SECRET_KEY },
         region: c.awsRegion || process.env.AWS_REGION
@@ -283,7 +279,7 @@ async function push() {
 
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            const { PutObjectCommand, DeleteObjectCommand } = getS3Sdk();
+            const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
             if (filesToUpload.length > 0) {
                 await Promise.all(filesToUpload.map(async f => {
                     const key = path.posix.join(path.basename(process.cwd()), f.name);
@@ -338,7 +334,7 @@ async function push() {
     const historyPrefix = path.posix.join(root, ".dorky-history", commitId);
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            const { PutObjectCommand } = getS3Sdk();
+            const { PutObjectCommand } = require("@aws-sdk/client-s3");
             await Promise.all(Object.keys(commitFiles).map(async f => {
                 const key = path.posix.join(historyPrefix, f);
                 await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: readFileSync(f) }));
@@ -370,7 +366,7 @@ async function pull() {
 
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            const { GetObjectCommand } = getS3Sdk();
+            const { GetObjectCommand } = require("@aws-sdk/client-s3");
             await Promise.all(Object.keys(files).map(async f => {
                 const key = path.posix.join(path.basename(process.cwd()), f);
                 const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
@@ -436,7 +432,7 @@ async function checkout(commitId) {
 
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            const { GetObjectCommand } = getS3Sdk();
+            const { GetObjectCommand } = require("@aws-sdk/client-s3");
             await Promise.all(Object.keys(entry.files).map(async f => {
                 const key = path.posix.join(historyPrefix, f);
                 const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
@@ -477,7 +473,7 @@ async function destroy() {
 
     if (creds.storage === "aws") {
         await runS3(creds, async (s3, bucket) => {
-            const { ListObjectsV2Command, DeleteObjectsCommand } = getS3Sdk();
+            const { ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
             const data = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: root + "/" }));
             if (data.Contents && data.Contents.length > 0) {
                 const deleteParams = { Bucket: bucket, Delete: { Objects: data.Contents.map(o => ({ Key: o.Key })) } };
