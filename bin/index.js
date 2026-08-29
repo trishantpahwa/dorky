@@ -393,10 +393,23 @@ async function push() {
                     for (const f of filesToUpload) {
                         const root = path.basename(process.cwd());
                         const parentId = await getFolderId(path.posix.dirname(path.posix.join(root, f.name)), drive);
-                        await drive.files.create({
-                            requestBody: { name: path.posix.basename(f.name), parents: [parentId] },
-                            media: { mimeType: f["mime-type"], body: createReadStream(f.name) }
+                        const fileName = path.posix.basename(f.name);
+                        const existing = await drive.files.list({
+                            q: `name='${escapeDriveName(fileName)}' and '${parentId}' in parents and trashed=false`,
+                            fields: 'files(id)'
                         });
+                        const media = { mimeType: f["mime-type"], body: createReadStream(f.name) };
+                        if (existing.data.files[0]) {
+                            await drive.files.update({
+                                fileId: existing.data.files[0].id,
+                                media
+                            });
+                        } else {
+                            await drive.files.create({
+                                requestBody: { name: fileName, parents: [parentId] },
+                                media
+                            });
+                        }
                         tick(`Uploaded ${f.name}`);
                     }
                 }
@@ -427,12 +440,8 @@ async function push() {
     filesToUpload.forEach(f => console.log(chalk.green(`✔ Uploaded: ${f.name}`)));
     filesToDelete.forEach(f => console.log(chalk.yellow(`✔ Deleted remote: ${f}`)));
 
-    meta["uploaded-files"] = { ...meta["stage-1-files"] };
-    writeJson(METADATA_PATH, meta);
-
-    history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
-    writeJson(HISTORY_PATH, history);
-
+    // Archive history BEFORE updating local metadata, so if archive fails,
+    // metadata is not updated and --checkout can still restore.
     const root = path.basename(process.cwd());
     const historyPrefix = path.posix.join(root, ".dorky-history", commitId);
     const historySpinner = makeSpinner(`Archiving commit ${commitId}...`).start();
@@ -449,10 +458,22 @@ async function push() {
             await runDrive(async (drive) => {
                 for (const f of Object.keys(commitFiles)) {
                     const parentId = await getFolderId(path.posix.join(root, ".dorky-history", commitId, path.posix.dirname(f)), drive);
-                    await drive.files.create({
-                        requestBody: { name: path.posix.basename(f), parents: [parentId] },
-                        media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
+                    // Idempotency: check for existing file before creating to avoid duplicates on retry
+                    const existing = await drive.files.list({
+                        q: `name='${escapeDriveName(path.posix.basename(f))}' and '${parentId}' in parents and trashed=false`,
+                        fields: "files(id)"
                     });
+                    if (existing.data.files[0]) {
+                        await drive.files.update({
+                            fileId: existing.data.files[0].id,
+                            media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
+                        });
+                    } else {
+                        await drive.files.create({
+                            requestBody: { name: path.posix.basename(f), parents: [parentId] },
+                            media: { mimeType: commitFiles[f]["mime-type"], body: createReadStream(f) }
+                        });
+                    }
                 }
             });
         }
@@ -461,6 +482,14 @@ async function push() {
         historySpinner.fail(`Failed to archive commit ${commitId}`);
         throw err;
     }
+
+    // Now that archive succeeded, update local metadata and history
+    meta["uploaded-files"] = { ...meta["stage-1-files"] };
+    writeJson(METADATA_PATH, meta);
+
+    history.push({ id: commitId, timestamp: new Date().toISOString(), files: commitFiles });
+    writeJson(HISTORY_PATH, history);
+
     console.log(chalk.cyan(`ℹ History commit saved: ${commitId}`));
 }
 
