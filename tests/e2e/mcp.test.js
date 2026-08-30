@@ -27,6 +27,25 @@ describe("Dorky MCP Server - E2E Tests", () => {
     });
 
     describe("Fail safes", () => {
+        it("should skip directories and continue staging regular files", async () => {
+            const dorkyDir = path.join(testDir, ".dorky");
+            fs.mkdirSync(dorkyDir);
+            fs.writeFileSync(
+                path.join(dorkyDir, "metadata.json"),
+                JSON.stringify({ "stage-1-files": {}, "uploaded-files": {} })
+            );
+            fs.mkdirSync(path.join(testDir, "config"));
+            fs.writeFileSync(path.join(testDir, ".env"), "SECRET=value");
+
+            const result = await mcp.callTool("add", { files: ["config", ".env"] });
+
+            expect(result.isError).toBeFalsy();
+            expect(result.text).toContain("Skipped (not a file): config");
+            expect(result.text).toContain("Staged: .env");
+            const metadata = JSON.parse(fs.readFileSync(path.join(dorkyDir, "metadata.json"), "utf-8"));
+            expect(Object.keys(metadata["stage-1-files"])).toEqual([".env"]);
+        });
+
         it("should warn if already initialized", async () => {
             await mcp.callTool("init", { provider: "aws" });
             const result = await mcp.callTool("init", { provider: "aws" });
