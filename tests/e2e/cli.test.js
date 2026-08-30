@@ -52,6 +52,25 @@ describe("Dorky CLI - E2E Tests", () => {
 
     describe("Fail safes", () => {
 
+        it("should skip directories and continue staging regular files", async () => {
+            const dorkyDir = path.join(testDir, ".dorky");
+            fs.mkdirSync(dorkyDir);
+            fs.writeFileSync(
+                path.join(dorkyDir, "metadata.json"),
+                JSON.stringify({ "stage-1-files": {}, "uploaded-files": {} })
+            );
+            fs.mkdirSync(path.join(testDir, "config"));
+            fs.writeFileSync(path.join(testDir, ".env"), "SECRET=value");
+
+            const result = await runCli(["--add", "config", ".env"], { cwd: testDir });
+
+            expect(result.exitCode).toBe(0);
+            expect(result.all).toContain("Skipped (not a file): config");
+            expect(result.all).toContain("Staged: .env");
+            const metadata = JSON.parse(fs.readFileSync(path.join(dorkyDir, "metadata.json"), "utf-8"));
+            expect(Object.keys(metadata["stage-1-files"])).toEqual([".env"]);
+        });
+
         it("should warn if already initialized", async () => {
             await runCli(["--init", "aws"], { cwd: testDir });
             const result = await runCli(["--init", "aws"], { cwd: testDir });
