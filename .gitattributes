@@ -1,0 +1,20 @@
+# Normalize line endings.
+#
+# Text files are stored with LF in the repository and checked out with the
+# platform's native endings. Without this, contributors on Windows commit CRLF
+# and edits to an existing file land with mixed endings (see tests/e2e/cli.test.js).
+* text=auto
+
+# Files that must stay LF even on Windows checkouts: the shebang in the bin
+# entry points breaks if a CR ends up on the first line.
+bin/* text eol=lf
+*.sh  text eol=lf
+
+# Binary assets: never convert, never diff as text.
+*.png  binary
+*.ico  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.woff  binary
+*.woff2 binary
